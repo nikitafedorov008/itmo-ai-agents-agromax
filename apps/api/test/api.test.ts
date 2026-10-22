@@ -10,8 +10,8 @@ const field={id:fieldId,name:'Тест',crop:'Пшеница',areaHa:1,center:{l
 const cfg=config({SUPABASE_SERVICE_ROLE_KEY:'test-service-key',DEEPSEEK_API_KEY:'test-key',AGENT_TIMEOUT_MS:'1000'});
 function fixture(){
  const record={id:obsId,fieldId,note:'Лист желтеет',photoIds:[],version:1,status:'draft',createdAt:new Date().toISOString()};
- const runs=new Map<string,any>();const operations=new Map<string,any>();let observations=[record];
- const repo={context:async()=>({farm:{id:randomUUID(),name:'Тест'},role:'chief',demo:true}),field:async(id:string)=>{if(id!==fieldId)throw new ApiFailure(404,'NOT_FOUND','Нет поля');return field;},observation:async(id:string)=>{if(id!==obsId)throw new ApiFailure(404,'NOT_FOUND','Нет наблюдения');return observations[0];},conversation:async()=>{throw new ApiFailure(404,'NOT_FOUND','Нет диалога')},bootstrap:async()=>({fields:[field],observations,tasks:[],conversations:[],notifications:[],demo:true}),sources:async()=>[{id:'fao',title:'FAO',url:'https://www.fao.org/',excerpt:'IPM',version:'2026'}],apply:vi.fn(async(id,type,payload)=>{const fp=JSON.stringify({type,payload});if(operations.has(id)){const op=operations.get(id);if(op.fp!==fp)throw new ApiFailure(409,'IDEMPOTENCY_MISMATCH','Повтор id');return op.result;}if(payload.version!==observations[0].version)throw new ApiFailure(409,'CONFLICT','Версия',observations[0]);observations=[{...observations[0],status:'approved',version:2}];const result={observation:observations[0]};operations.set(id,{fp,result});return result;}),beginAgent:async(id:string,fp:any)=>{const run=runs.get(id);if(run){if(JSON.stringify(run.fp)!==JSON.stringify(fp))throw new ApiFailure(409,'IDEMPOTENCY_MISMATCH','Повтор id');if(run.result)return {cached:run.result};throw new ApiFailure(409,'IN_PROGRESS','Выполняется');}runs.set(id,{fp});return {started:true};},finishAgent:vi.fn(async(id,conversation,result,error)=>{runs.set(id,{...runs.get(id),result,error});}),agentResult:async(id:string)=>runs.get(id).result,photo:async()=>{throw new ApiFailure(404,'NOT_FOUND','Нет фото')},upload:vi.fn(),download:vi.fn(),readNotification:vi.fn()} as unknown as Repository;
+ const conversations=new Map<string,any>();const runs=new Map<string,any>();const operations=new Map<string,any>();let observations=[record];
+ const repo={context:async()=>({farm:{id:randomUUID(),name:'Тест'},role:'chief',demo:true}),field:async(id:string)=>{if(id!==fieldId)throw new ApiFailure(404,'NOT_FOUND','Нет поля');return field;},observation:async(id:string)=>{if(id!==obsId)throw new ApiFailure(404,'NOT_FOUND','Нет наблюдения');return observations[0];},conversation:async(id:string)=>{const conversation=conversations.get(id);if(!conversation)throw new ApiFailure(404,'NOT_FOUND','Нет диалога');return conversation;},bootstrap:async()=>({fields:[field],observations,tasks:[],conversations:[],notifications:[],demo:true}),sources:async()=>[{id:'fao',title:'FAO',url:'https://www.fao.org/',excerpt:'IPM',version:'2026'}],apply:vi.fn(async(id,type,payload)=>{const fp=JSON.stringify({type,payload});if(operations.has(id)){const op=operations.get(id);if(op.fp!==fp)throw new ApiFailure(409,'IDEMPOTENCY_MISMATCH','Повтор id');return op.result;}if(payload.version!==observations[0].version)throw new ApiFailure(409,'CONFLICT','Версия',observations[0]);observations=[{...observations[0],status:'approved',version:2}];const result={observation:observations[0]};operations.set(id,{fp,result});return result;}),beginAgent:async(id:string,fp:any)=>{const run=runs.get(id);if(run){if(JSON.stringify(run.fp)!==JSON.stringify(fp))throw new ApiFailure(409,'IDEMPOTENCY_MISMATCH','Повтор id');if(run.result)return {cached:run.result};throw new ApiFailure(409,'IN_PROGRESS','Выполняется');}runs.set(id,{fp});return {started:true};},finishAgent:vi.fn(async(id,conversation,result,error)=>{if(conversation){const previous=conversations.get(conversation.id);const saved={...conversation,messages:[...(previous?.messages||[]),...conversation.messages]};conversations.set(saved.id,saved);result={...result,conversation:saved};}runs.set(id,{...runs.get(id),result,error});}),agentResult:async(id:string)=>runs.get(id).result,photo:async()=>{throw new ApiFailure(404,'NOT_FOUND','Нет фото')},upload:vi.fn(),download:vi.fn(),readNotification:vi.fn()} as unknown as Repository;
  const fetcher=vi.fn();const app=createApp(cfg,{authenticate:async()=>repo,fetch:fetcher as any});
  const request=(path:string,body?:unknown,token=true)=>app.request('/api'+path,{method:body?'POST':'GET',headers:{...(token?{Authorization:'Bearer session'}:{}),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
  return {app,repo,request,fetcher,runs};
@@ -40,4 +40,85 @@ describe('bounded model agent',()=>{
 });
 describe('background runner',()=>{
  it('prevents overlapping ticks and stops cleanly',async()=>{vi.useFakeTimers();let release:()=>void=()=>{};const tick=vi.fn(()=>new Promise<void>(r=>{release=r}));const stop=startScheduler({...cfg,schedulerInterval:10000},tick as any);await vi.advanceTimersByTimeAsync(30000);expect(tick).toHaveBeenCalledTimes(1);release();await Promise.resolve();await vi.advanceTimersByTimeAsync(10000);expect(tick).toHaveBeenCalledTimes(2);stop();release();await vi.advanceTimersByTimeAsync(30000);expect(tick).toHaveBeenCalledTimes(2);vi.useRealTimers();});
+});
+
+describe('grounded workbench artifacts',()=>{
+ const question={prompt:'Где заметно пожелтение?',options:['На нижних листьях','На всех листьях'],allowCustom:true};
+ const clarification={kind:'clarification',title:'Уточнить признаки',body:'Нужно уточнить распространение.',stage:'signs',question,evidence:[{kind:'observation',summary:'Записано пожелтение листа.'},{kind:'history',summary:'Получена история поля.'}],actions:['reply','open_history']};
+ it.each([
+  {...clarification,question:undefined},
+  {...clarification,question:{...question,options:['Да',' да ']}},
+  {...clarification,question:{...question,options:[' ']}},
+  {...clarification,question:{...question,options:[],allowCustom:false}},
+  {...clarification,question:{...question,options:Array.from({length:7},(_,i)=>String(i))}},
+  {...clarification,question:{...question,url:'https://example.com'}},
+  {...clarification,actions:['approve_observation']},
+  {...clarification,actions:['reply','reply']},
+  {...clarification,stage:'confirmed'},
+  {...clarification,evidence:[{kind:'satellite',summary:'Unsupported'}]},
+  {...clarification,evidence:[{kind:'history',summary:' '}]},
+ ])('rejects invalid workbench shape without executing writes',async artifact=>{
+  const f=fixture();f.fetcher.mockImplementation(async()=>completion({text:'Уточнение',sourceIds:[],artifact}));
+  const r=await f.request('/agent/chat',{operationId:randomUUID(),fieldId,observationId:obsId,message:'Что видно?',provider:'deepseek'});
+  expect(r.status).toBe(502);expect((await r.json()).code).toBe('INVALID_MODEL_OUTPUT');expect(f.fetcher).toHaveBeenCalledTimes(2);expect(f.repo.apply).not.toHaveBeenCalled();
+ });
+ it.each([
+  {evidence:[{kind:'weather',summary:'Прогноз получен.'}]},
+  {evidence:[{kind:'source',summary:'По источнику.'}]},
+  {actions:['open_weather']},
+  {actions:['view_sources']},
+  {actions:['start_revisit'],observationId:obsId,observationVersion:1},
+  {actions:['review_observation']},
+  {actions:['review_observation'],observationId:obsId,observationVersion:99},
+ ])('rejects unsupported evidence and action prerequisites',async extra=>{
+  const f=fixture();f.fetcher.mockImplementation(async()=>completion({text:'Ответ',sourceIds:[],artifact:{kind:'summary',title:'Итог',body:'Данные',...extra}}));
+  const r=await f.request('/agent/chat',{operationId:randomUUID(),fieldId,observationId:obsId,message:'Осмотр',provider:'deepseek'});
+  expect(r.status).toBe(502);expect(f.repo.apply).not.toHaveBeenCalled();
+ });
+ it('rejects observation evidence without a selected observation',async()=>{
+  const f=fixture();f.fetcher.mockImplementation(async()=>completion({text:'Ответ',sourceIds:[],artifact:clarification}));
+  const response=await f.request('/agent/chat',{operationId:randomUUID(),fieldId,message:'Осмотр',provider:'deepseek'});expect(response.status).toBe(502);
+ });
+ it.each([
+  {actions:['review_observation']},
+  {proposedTask:{title:'Осмотр',dueAt:'2026-10-25T09:00:00Z'}},
+ ])('rejects review and task proposals on an approved observation',async extra=>{
+  const f=fixture();await f.repo.apply(randomUUID(),'observation.approve',{id:obsId,version:1,confirmed:true});vi.mocked(f.repo.apply).mockClear();
+  f.fetcher.mockImplementation(async()=>completion({text:'Ответ',sourceIds:[],artifact:{kind:'summary',title:'Итог',body:'Осмотр',observationId:obsId,observationVersion:2,...extra}}));
+  const response=await f.request('/agent/chat',{operationId:randomUUID(),fieldId,observationId:obsId,message:'Осмотр',provider:'deepseek'});expect(response.status).toBe(502);expect(f.repo.apply).not.toHaveBeenCalled();
+ });
+ it('repairs a missing structured question with actual model output',async()=>{
+  const f=fixture();f.fetcher.mockResolvedValueOnce(completion({text:'Где признаки?',sourceIds:[],artifact:{kind:'clarification',title:'Уточнение',body:'Где признаки?'}})).mockResolvedValueOnce(completion({text:'Опишите признаки',sourceIds:[],artifact:{...clarification,question:{prompt:'Опишите признаки',options:[],allowCustom:true}}}));
+  const response=await f.request('/agent/chat',{operationId:randomUUID(),fieldId,observationId:obsId,message:'Осмотр',provider:'deepseek'});expect(response.status).toBe(200);expect((await response.json()).reply.artifact.question).toEqual({prompt:'Опишите признаки',options:[],allowCustom:true});expect(f.fetcher).toHaveBeenCalledTimes(2);
+ });
+ it('persists model question and selected answer in the same conversation and observation',async()=>{
+  const f=fixture();f.fetcher.mockResolvedValueOnce(completion({text:question.prompt,sourceIds:[],artifact:clarification}));
+  const first=await f.request('/agent/chat',{operationId:randomUUID(),fieldId,observationId:obsId,message:'Лист желтеет',provider:'deepseek'});expect(first.status).toBe(200);const result=await first.json();
+  expect(result.reply.artifact).toEqual(clarification);expect(result.reply.requiresConfirmation).toBe(false);
+  f.fetcher.mockResolvedValueOnce(completion({text:'Проверьте распространение на нижних листьях.',sourceIds:['fao'],artifact:{kind:'observation',title:'Осмотр',body:'Проверить распространение',stage:'decision',observationId:obsId,observationVersion:1,actions:['review_observation','view_sources'],evidence:[{kind:'source',summary:'Доступен источник FAO.'}]}}));
+  const answer={operationId:randomUUID(),conversationId:result.conversation.id,fieldId,observationId:obsId,message:question.options[0],provider:'deepseek'};
+  const second=await f.request('/agent/chat',answer);expect(second.status).toBe(200);const saved=await second.json();
+  expect(saved.conversation.id).toBe(result.conversation.id);expect(saved.conversation.messages).toHaveLength(4);expect(saved.reply.artifact.observationId).toBe(obsId);expect(saved.reply.requiresConfirmation).toBe(true);
+  const messages=JSON.parse(f.fetcher.mock.calls[1][1].body).messages;expect(messages.at(-1).content).toBe(question.options[0]);expect(messages.some((m:any)=>m.content.includes(question.prompt))).toBe(true);expect(f.repo.apply).not.toHaveBeenCalled();
+  await f.request('/agent/chat',answer);expect(f.fetcher).toHaveBeenCalledTimes(2);
+ });
+ it('accepts actual weather evidence only after a successful scoped tool read',async()=>{
+  const f=fixture();f.fetcher.mockResolvedValueOnce(completion(null,[{id:'weather1',type:'function',function:{name:'weather',arguments:'{}'}}])).mockResolvedValueOnce(new Response(JSON.stringify({daily:{time:['2026-10-24'],temperature_2m_min:[1],temperature_2m_max:[5],precipitation_sum:[2]}}))).mockResolvedValueOnce(completion({text:'По прогнозу ожидаются осадки.',sourceIds:[],artifact:{kind:'summary',title:'Погода',body:'Прогноз получен',evidence:[{kind:'weather',summary:'Ожидается 2 мм осадков.'}],actions:['open_weather']}}));
+  const response=await f.request('/agent/chat',{operationId:randomUUID(),fieldId,message:'Контекст',provider:'deepseek'});expect(response.status).toBe(200);expect((await response.json()).reply.tools).toContain('weather');
+  expect(String(f.fetcher.mock.calls[1][0])).toContain('latitude=55');
+ });
+ it('allows revisit only for the exact approved observation and never approves from chat',async()=>{
+  const f=fixture();await f.repo.apply(randomUUID(),'observation.approve',{id:obsId,version:1,confirmed:true});vi.mocked(f.repo.apply).mockClear();
+  f.fetcher.mockResolvedValueOnce(completion({text:'Можно записать повторный осмотр.',sourceIds:[],artifact:{kind:'summary',title:'Повторный осмотр',body:'Сохраните новое наблюдение после осмотра.',observationId:obsId,observationVersion:2,actions:['start_revisit']}}));
+  const response=await f.request('/agent/chat',{operationId:randomUUID(),fieldId,observationId:obsId,message:'Подтверждаю',provider:'deepseek'});expect(response.status).toBe(200);expect(f.repo.apply).not.toHaveBeenCalled();
+ });
+ it('rejects a version that changes during model execution',async()=>{
+  const f=fixture();let changed=false;f.fetcher.mockImplementation(async()=>{if(!changed){changed=true;await f.repo.apply(randomUUID(),'observation.approve',{id:obsId,version:1,confirmed:true});}return completion({text:'Предложение',sourceIds:[],artifact:{kind:'observation',title:'Осмотр',body:'Проверить',observationId:obsId,observationVersion:1,actions:['review_observation']}})});
+  const response=await f.request('/agent/chat',{operationId:randomUUID(),fieldId,observationId:obsId,message:'Осмотр',provider:'deepseek'});expect(response.status).toBe(502);
+ });
+ it('keeps legacy stored artifacts readable when answering a conversation',async()=>{
+  const f=fixture();const id=randomUUID();const reply={id:randomUUID(),text:'Старый ответ',provider:'deepseek',model:'old',sources:[],tools:[],artifact:{kind:'clarification',title:'Старое уточнение',body:'Какие листья?'},requiresConfirmation:false,createdAt:new Date().toISOString()};
+  await f.repo.finishAgent(id,{id,fieldId,messages:[{id:reply.id,role:'assistant',text:reply.text,reply,createdAt:reply.createdAt}]} as any,{reply});
+  f.fetcher.mockResolvedValueOnce(completion({text:'Спасибо за уточнение.',sourceIds:[]}));expect((await f.request('/agent/chat',{operationId:randomUUID(),conversationId:id,fieldId,observationId:obsId,message:'Нижние',provider:'deepseek'})).status).toBe(200);
+ });
 });
