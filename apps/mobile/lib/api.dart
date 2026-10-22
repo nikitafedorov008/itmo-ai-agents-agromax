@@ -49,12 +49,13 @@ class Api {
     return data;
   }
 
-  Future<String> upload(String path) async {
+  Future<String> upload(String path, {required String operationId}) async {
     final req = http.MultipartRequest(
       'POST',
       Uri.parse('$base${ApiRoutes.uploadPhoto}'),
     );
     req.headers['Authorization'] = 'Bearer $token';
+    req.fields['operationId'] = operationId;
     req.files.add(
       await http.MultipartFile.fromPath(
         'file',

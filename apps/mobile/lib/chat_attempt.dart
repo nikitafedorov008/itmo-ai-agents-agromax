@@ -36,7 +36,11 @@ abstract final class ChatAttempt {
     Object error,
   ) => {
     ...request,
-    if (error is ApiFailure && terminalCodes.contains(error.code))
+    if (error is ApiFailure &&
+        (terminalCodes.contains(error.code) ||
+            (error.code == 'WEATHER_UNAVAILABLE' &&
+                (error.status == 502 || error.status == 409)) ||
+            (error.code == 'DATABASE_UNAVAILABLE' && error.status == 409)))
       '_terminalError': error.code,
   };
 }
