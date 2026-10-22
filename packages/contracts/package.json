@@ -1,1 +1,10 @@
-{"name":"@agromax/contracts","version":"0.1.0","private":true,"type":"module","exports":"./src/index.ts"}
+{
+  "name": "@agromax/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.generated.ts"
+  }
+}

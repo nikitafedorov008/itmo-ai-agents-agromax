@@ -16,12 +16,16 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "contracts:generate": "node tools/generate-contracts.mjs",
     "db:start": "supabase start",
-    "db:stop": "supabase stop"
+    "db:stop": "supabase stop",
+    "dev": "node tools/dev.mjs",
+    "setup:local": "supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime && node tools/configure-local.mjs",
+    "check:integration": "node tools/smoke.mjs && node tools/check-security.mjs",
+    "check:models": "node tools/check-models.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "supabase": "^2.121.0",
-    "typescript": "^7.0.2",
+    "typescript": "^5.9.3",
     "vitest": "^5.0.5"
   }
 }

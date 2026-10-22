@@ -18,12 +18,10 @@
 
 ```sh
 npm ci
-npx supabase start
-# Заполнить apps/api/.env по apps/api/.env.example.
-# Локальные ключи Supabase: npx supabase status (не публиковать вывод).
-npm run dev:api
-# В другом терминале
-npm run dev:web
+npm run setup:local
+# Добавить DEEPSEEK_API_KEY и MIMO_API_KEY в apps/api/.env.
+# Файл уже содержит автоматически подставленные локальные настройки Supabase.
+npm run dev
 ```
 
 Веб: http://localhost:5173, API: http://localhost:8787. API не выдаёт ключи моделей клиентам. Вход «Демо» создаёт отдельное хозяйство с синтетическими полями.

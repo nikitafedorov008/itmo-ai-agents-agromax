@@ -1,0 +1,80 @@
+{
+  "integration": {
+    "at": "2026-10-22T22:07:21.482Z",
+    "checks": [
+      "Real Supabase health",
+      "Isolated demo sessions",
+      "Stable photo retry returns identical metadata",
+      "Private photo upload and cross-farm rejection",
+      "Durable idempotency and payload mismatch",
+      "Approval confirmation and farm isolation",
+      "Atomic approval + task and stale version rejection",
+      "Linked revisit and persisted completion",
+      "Sync replay without duplicate",
+      "Real signup and empty farm field onboarding",
+      "Notification read persisted"
+    ]
+  },
+  "security": {
+    "at": "2026-10-22T22:07:21.605Z",
+    "checks": [
+      "Direct RPC rejects object-valued note",
+      "Direct RPC rejects malformed field",
+      "Direct RPC rejects injected approval state",
+      "Authenticated callers cannot forge agent completion",
+      "Cannot register nonexistent photo evidence",
+      "Scheduler denied to ordinary users",
+      "Scheduler durable deduplication",
+      "Attached photo evidence survives direct delete attempt",
+      "Agronomist cannot perform chief-only operation"
+    ]
+  },
+  "providers": [
+    {
+      "provider": "deepseek",
+      "status": 200,
+      "elapsedMs": 5565,
+      "model": "deepseek-flash",
+      "tools": [
+        "field_history",
+        "source_search"
+      ],
+      "sources": [
+        "fao-ipm",
+        "fao-soils",
+        "fao-water"
+      ]
+    },
+    {
+      "provider": "mimo",
+      "status": 200,
+      "elapsedMs": 38417,
+      "model": "mimo-v2.6-flash",
+      "tools": [
+        "field_history",
+        "source_search"
+      ],
+      "sources": [
+        "fao-ipm",
+        "fao-soils",
+        "fao-water"
+      ]
+    }
+  ],
+  "offlineProcessRestart": {
+    "verified": true,
+    "draftRetained": true,
+    "queueRetained": true,
+    "reconnectedState": "synced"
+  },
+  "nativeIOS": {
+    "tested": true,
+    "platform": "iPhone 17 Pro / iOS 26.4",
+    "realBackend": true,
+    "cameraGPSPermissionsTested": false
+  },
+  "android": {
+    "tested": false,
+    "reason": "SDK not installed"
+  }
+}

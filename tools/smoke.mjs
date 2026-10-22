@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {randomUUID as uuid} from 'node:crypto';
+import {mkdirSync,writeFileSync} from 'node:fs';
+const base=process.env.API_BASE_URL||'http://localhost:8787';
+let checks=[];
+async function call(path,body,token,status=200,method=body===undefined?'GET':'POST'){const r=await fetch(base+path,{method,headers:{...(body instanceof FormData?{}:{'Content-Type':'application/json'}),...(token?{Authorization:`Bearer ${token}`}:{})},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)});const d=(r.headers.get('content-type')||'').includes('json')?await r.json():await r.arrayBuffer();assert.equal(r.status,status,`${path}: ${r.status} ${JSON.stringify(d)}`);return d;}
+const health=await call('/api/health');assert.equal(health.ok,true);checks.push('Real Supabase health');
+const a=await call('/api/auth/demo',{}), b=await call('/api/auth/demo',{});
+assert.notEqual(a.farm.id,b.farm.id);const data=await call('/api/bootstrap',undefined,a.accessToken);assert.equal(data.fields.length,3);checks.push('Isolated demo sessions');
+const f=data.fields[0];
+const form=new FormData();form.set('operationId',uuid());form.set('file',new File([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z4W8AAAAASUVORK5CYII=','base64')],'test.png',{type:'image/png'}));
+const photo=await call('/api/photos',form,a.accessToken,201);assert.deepEqual(await call('/api/photos',form,a.accessToken,201),photo);checks.push('Stable photo retry returns identical metadata');await call('/api/photos/'+photo.id,undefined,a.accessToken);await call('/api/photos/'+photo.id,undefined,b.accessToken,404);checks.push('Private photo upload and cross-farm rejection');
+const input={operationId:uuid(),id:uuid(),fieldId:f.id,note:'Желтеют листья по краю поля, осмотр утром.',photoIds:[photo.id],extent:'около 5%'};
+const o=await call('/api/observations',input,a.accessToken);assert.deepEqual(await call('/api/observations',input,a.accessToken),o);
+await call('/api/observations',{...input,note:'different'},a.accessToken,409);checks.push('Durable idempotency and payload mismatch');
+await call('/api/observations/'+o.id+'/approve',{operationId:uuid(),version:o.version},a.accessToken,400);
+await call('/api/observations/'+o.id+'/approve',{operationId:uuid(),version:o.version,confirmed:true},b.accessToken,404);checks.push('Approval confirmation and farm isolation');
+const approval={operationId:uuid(),version:o.version,confirmed:true,task:{title:'Повторный осмотр',dueAt:new Date(Date.now()-60000).toISOString()}};
+const approved=await call('/api/observations/'+o.id+'/approve',approval,a.accessToken);assert.equal(approved.observation.status,'approved');assert.ok(approved.task.id);assert.deepEqual(await call('/api/observations/'+o.id+'/approve',approval,a.accessToken),approved);
+await call('/api/observations',{...input,operationId:uuid(),version:1},a.accessToken,409);checks.push('Atomic approval + task and stale version rejection');
+const child=await call('/api/observations',{operationId:uuid(),id:uuid(),fieldId:f.id,note:'Повторный осмотр: изменений нет.',photoIds:[],parentObservationId:o.id},a.accessToken);assert.equal(child.parentObservationId,o.id);
+const completed=await call('/api/tasks/'+approved.task.id+'/complete',{operationId:uuid(),version:approved.task.version,confirmed:true,outcome:'Повторный осмотр выполнен; изменений нет.'},a.accessToken);assert.equal(completed.status,'done');checks.push('Linked revisit and persisted completion');
+const sync=await call('/api/sync',{operations:[{operationId:input.operationId,type:'observation.upsert',payload:Object.fromEntries(Object.entries(input).filter(([k])=>k!=='operationId'))}]},a.accessToken);assert.equal(sync.results[0].status,'applied');checks.push('Sync replay without duplicate');
+const normalEmail=`smoke-${uuid()}@example.test`;const user=await call('/api/auth/signup',{email:normalEmail,password:uuid()+'Ag!',name:'Тестовое хозяйство'},undefined);assert.ok(user.accessToken);const empty=await call('/api/bootstrap',undefined,user.accessToken);assert.equal(empty.fields.length,0);
+const field=await call('/api/fields',{operationId:uuid(),confirmed:true,name:'Участок 1',crop:'Пшеница',areaHa:12,center:{lat:55.7,lng:37.4},boundary:[]},user.accessToken,201);assert.equal(field.boundary.length,0);checks.push('Real signup and empty farm field onboarding');
+const after=await call('/api/bootstrap',undefined,a.accessToken);assert.equal(after.observations.length,2);assert.equal(after.tasks.length,1);
+if(after.notifications[0]){const n=await call('/api/notifications/'+after.notifications[0].id+'/read',{},a.accessToken);assert.equal(n.read,true);checks.push('Notification read persisted');}
+mkdirSync('.data',{recursive:true});writeFileSync('.data/smoke-session.json',JSON.stringify({session:a,fieldId:f.id,observationId:child.id}));
+writeFileSync('.data/smoke-result.json',JSON.stringify({at:new Date().toISOString(),checks},null,2));
+console.log(JSON.stringify({passed:checks.length,checks},null,2));

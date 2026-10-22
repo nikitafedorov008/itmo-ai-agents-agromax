@@ -10,7 +10,7 @@ API origin http://localhost:8787. All JSON camelCase. Errors {error,code,current
 - POST /api/fields {operationId,confirmed:true,name,crop,areaHa,center,boundary} => Field; chief only, boundary=[] means point-only field without invented contour
 - GET /api/photos/:id => private binary image, Bearer required
 - GET /api/fields/:id/weather => Weather
-- POST /api/photos multipart form field file => Photo; authenticated private retrieval URL; clients resolve relative URLs against API origin and send Bearer on retrieval
+- POST /api/photos multipart form fields file, operationId UUID => Photo; reuse operationId across retries, changed content rejected409; authenticated private retrieval URL; clients resolve relative URLs against API origin and send Bearer on retrieval
 - POST /api/observations {operationId,...ObservationInput} => Observation
 - POST /api/observations/:id/approve {operationId,version,confirmed:true,task?:{title,dueAt}} => {observation:Observation,task?:Task}; confirmation and expected version mandatory, idempotent transaction
 - POST /api/tasks/:id/complete {operationId,version,confirmed:true,outcome} => Task

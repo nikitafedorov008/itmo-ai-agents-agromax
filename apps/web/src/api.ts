@@ -1,4 +1,5 @@
-import { ApiClient, type Session } from "@agromax/contracts";
+import { type Session } from "@agromax/contracts";
+import { AgromaxClient } from "@agromax/contracts/client";
 export const ORIGIN =
   (import.meta as unknown as { env: Record<string, string> }).env
     .VITE_API_ORIGIN || "http://localhost:8787";
@@ -15,7 +16,7 @@ export function saveSession(s: Session | null) {
   else sessionStorage.removeItem("agromax.session");
 }
 export const apiFor = (s: Session | null) =>
-  new ApiClient(ORIGIN, s?.accessToken);
+  new AgromaxClient(ORIGIN, s?.accessToken);
 export const date = (v: string) =>
   new Date(v).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 export const errorText = (e: unknown) =>

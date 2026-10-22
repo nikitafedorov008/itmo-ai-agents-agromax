@@ -69,8 +69,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/Session"
                 }
               }
             }
@@ -116,8 +115,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/Session"
                 }
               }
             }
@@ -201,21 +199,18 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "additionalProperties": true,
-                "description": "Fields and typed payloads are specified in docs/CONTRACT.md and src/index.ts"
+                "$ref": "#/components/schemas/FieldInput"
               }
             }
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/Field"
                 }
               }
             }
@@ -253,8 +248,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/Bootstrap"
                 }
               }
             }
@@ -302,8 +296,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/Weather"
                 }
               }
             }
@@ -348,6 +341,11 @@
                   "file": {
                     "type": "string",
                     "format": "binary"
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Stable photo identifier reused on retries"
                   }
                 }
               }
@@ -355,13 +353,12 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/Photo"
                 }
               }
             }
@@ -460,8 +457,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/Observation"
                 }
               }
             }
@@ -582,8 +578,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/Task"
                 }
               }
             }
@@ -745,8 +740,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/Notification"
                 }
               }
             }
@@ -771,6 +765,733 @@
     }
   },
   "components": {
+    "schemas": {
+      "Provider": {
+        "type": "string",
+        "enum": [
+          "deepseek",
+          "mimo"
+        ]
+      },
+      "Role": {
+        "type": "string",
+        "enum": [
+          "agronomist",
+          "chief"
+        ]
+      },
+      "Point": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ],
+        "additionalProperties": false
+      },
+      "Field": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "crop": {
+            "type": "string"
+          },
+          "areaHa": {
+            "type": "number"
+          },
+          "center": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "boundary": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Point"
+            }
+          },
+          "demo": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "crop",
+          "areaHa",
+          "center",
+          "boundary",
+          "demo"
+        ],
+        "additionalProperties": false
+      },
+      "Photo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "name",
+          "mimeType"
+        ],
+        "additionalProperties": false
+      },
+      "Observation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fieldId": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "extent": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "photoIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "approved"
+            ]
+          },
+          "version": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "approvedAt": {
+            "type": "string"
+          },
+          "parentObservationId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fieldId",
+          "note",
+          "photoIds",
+          "status",
+          "version",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fieldId": {
+            "type": "string"
+          },
+          "observationId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "dueAt": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "done"
+            ]
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fieldId",
+          "observationId",
+          "title",
+          "dueAt",
+          "status",
+          "version",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "Source": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "excerpt": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "url",
+          "excerpt",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "AgentArtifact": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "clarification",
+              "observation",
+              "summary"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "observationId": {
+            "type": "string"
+          },
+          "observationVersion": {
+            "type": "number"
+          },
+          "proposedTask": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "dueAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "dueAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "AgentReply": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "model": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            }
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "artifact": {
+            "$ref": "#/components/schemas/AgentArtifact"
+          },
+          "requiresConfirmation": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "provider",
+          "model",
+          "sources",
+          "tools",
+          "requiresConfirmation",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "reply": {
+            "$ref": "#/components/schemas/AgentReply"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "text",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "Conversation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fieldId": {
+            "type": "string"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "fieldId",
+          "messages"
+        ],
+        "additionalProperties": false
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "fieldId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "body",
+          "createdAt",
+          "read"
+        ],
+        "additionalProperties": false
+      },
+      "Weather": {
+        "type": "object",
+        "properties": {
+          "fetchedAt": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string"
+                },
+                "minC": {
+                  "type": "number"
+                },
+                "maxC": {
+                  "type": "number"
+                },
+                "rainMm": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "date",
+                "minC",
+                "maxC",
+                "rainMm"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fetchedAt",
+          "location",
+          "days",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "role": {
+                "$ref": "#/components/schemas/Role"
+              }
+            },
+            "required": [
+              "id",
+              "role"
+            ],
+            "additionalProperties": false
+          },
+          "farm": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "demo": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accessToken",
+          "user",
+          "farm",
+          "demo"
+        ],
+        "additionalProperties": false
+      },
+      "Bootstrap": {
+        "type": "object",
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Field"
+            }
+          },
+          "observations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Observation"
+            }
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            }
+          },
+          "conversations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Conversation"
+            }
+          },
+          "notifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            }
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/Provider"
+                },
+                "configured": {
+                  "type": "boolean"
+                },
+                "model": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "configured",
+                "model"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "demo": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "fields",
+          "observations",
+          "tasks",
+          "conversations",
+          "notifications",
+          "providers",
+          "demo"
+        ],
+        "additionalProperties": false
+      },
+      "FieldInput": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "crop": {
+            "type": "string"
+          },
+          "areaHa": {
+            "type": "number"
+          },
+          "center": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "boundary": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Point"
+            }
+          }
+        },
+        "required": [
+          "operationId",
+          "confirmed",
+          "name",
+          "crop",
+          "areaHa",
+          "center",
+          "boundary"
+        ],
+        "additionalProperties": false
+      },
+      "ObservationInput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fieldId": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "extent": {
+            "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Point"
+          },
+          "photoIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "parentObservationId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "fieldId",
+          "note",
+          "photoIds"
+        ],
+        "additionalProperties": false
+      },
+      "SyncOperation": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "field.create",
+              "observation.upsert",
+              "observation.approve",
+              "task.complete"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "operationId",
+          "type",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "SyncResult": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "applied",
+              "conflict",
+              "error"
+            ]
+          },
+          "data": {},
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operationId",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "current": {}
+        },
+        "required": [
+          "error",
+          "code"
+        ],
+        "additionalProperties": false
+      }
+    },
     "securitySchemes": {
       "bearerAuth": {
         "type": "http",

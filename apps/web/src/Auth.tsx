@@ -12,7 +12,7 @@ export function Auth({ onSession }: { onSession: (s: Session) => void }) {
     await enter(mode, {
       email: form.get("email"),
       password: form.get("password"),
-      name: form.get("name"),
+      ...(mode === "signup" ? {name: form.get("name")} : {}),
     });
   }
   async function enter(path: string, body: unknown) {

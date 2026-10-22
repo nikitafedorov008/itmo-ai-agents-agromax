@@ -22,6 +22,19 @@ Future<void> main() async {
   );
 }
 
+String coordinateText(dynamic point) {
+  if (point is! Map || point['lat'] is! num || point['lng'] is! num)
+    return 'Не указаны';
+  return '${(point['lat'] as num).toStringAsFixed(5)}, ${(point['lng'] as num).toStringAsFixed(5)}';
+}
+
+String observationDate(dynamic value) {
+  final date = DateTime.tryParse(value.toString())?.toLocal();
+  if (date == null) return 'Дата не указана';
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${two(date.day)}.${two(date.month)}.${date.year} · ${two(date.hour)}:${two(date.minute)}';
+}
+
 class AgromaxApp extends StatelessWidget {
   const AgromaxApp({super.key});
   @override
@@ -96,9 +109,15 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       await action();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e is ApiFailure
+                  ? e.message
+                  : 'Не удалось выполнить действие. Проверьте соединение и разрешения приложения.',
+            ),
+          ),
+        );
       }
     }
   }
@@ -483,7 +502,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       ),
     if (fieldId != null)
       Text(
-        'Координаты: ${items('fields').where((f) => f['id'] == fieldId).firstOrNull?['center']}',
+        'Координаты: ${coordinateText(items('fields').where((f) => f['id'] == fieldId).firstOrNull?['center'])}',
       ),
     OutlinedButton.icon(
       onPressed: fieldId == null
@@ -516,7 +535,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
     for (final o in items('observations').where((o) => o['fieldId'] == fieldId))
       card(
         o['status'] == 'approved' ? 'Рекомендация утверждена' : 'Наблюдение',
-        '${o['note']}\n${o['createdAt']}\nФото: ${(o['photoIds'] as List).length}',
+        '${o['note']}\n${observationDate(o['createdAt'])}\nФото: ${(o['photoIds'] as List).length}',
         actions: [
           for (final id in o['photoIds'] as List)
             Padding(
@@ -629,7 +648,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
     if ((model.draft['photoIds'] as List?)?.isNotEmpty == true)
       Text('Сохранённых фото: ${(model.draft['photoIds'] as List).length}'),
     if (model.draft['location'] != null)
-      Text('Координаты: ${model.draft['location']}'),
+      Text('Координаты: ${coordinateText(model.draft['location'])}'),
     for (final photo in List<String>.from(model.draft['localPhotos'] ?? []))
       Padding(
         padding: const EdgeInsets.only(bottom: 8),

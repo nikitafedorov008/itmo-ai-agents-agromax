@@ -1444,3 +1444,13 @@ textarea::placeholder {
 .error .outline {
   font-size: 11px;
 }
+/* Keep the welcome usable on laptop-height displays without scrolling its title away. */
+@media (min-width: 821px) and (max-height: 850px) {
+  .chat-empty { margin: 0 auto; text-align: left; }
+  .chat-empty .spark-icon, .chat-empty > .eyebrow { display: none; }
+  .chat-empty h3 { font-size: 20px; line-height: 1.2; margin: 0 0 8px; }
+  .chat-empty h3 br { display: none; }
+  .chat-empty p { font-size: 11px; max-width: none; margin: 0 0 10px; }
+  .suggestions { gap: 5px; }
+  .suggestions button { padding: 7px 9px; }
+}

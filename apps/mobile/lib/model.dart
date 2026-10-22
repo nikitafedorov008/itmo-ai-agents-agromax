@@ -84,14 +84,16 @@ class AppModel extends Notifier<int> {
               },
       );
       if (result['accessToken'] == null) {
-        throw Exception('Подтвердите почту перед входом');
+        throw ApiFailure(400, 'Подтвердите почту перед входом');
       }
       session = result;
       await credentials.write(key: 'session', value: jsonEncode(session));
       await loadLocal();
       await refresh();
     } catch (e) {
-      error = e.toString();
+      error = e is ApiFailure
+          ? e.message
+          : 'Не удалось подключиться к серверу.';
     } finally {
       busy = false;
       changed();
@@ -135,7 +137,9 @@ class AppModel extends Notifier<int> {
         await refresh();
       }
     } catch (e) {
-      error = 'Нет связи: $e. Локальные записи сохранены.';
+      error = e is ApiFailure
+          ? e.message
+          : 'Нет связи с сервером. Локальные записи сохранены.';
     } finally {
       if (account == scope && session != null) {
         queue = await store.queue(scope);

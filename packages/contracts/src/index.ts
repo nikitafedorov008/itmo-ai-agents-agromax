@@ -16,7 +16,7 @@ export interface Session {accessToken:string; user:{id:string; email?:string; ro
 export interface Bootstrap {fields:Field[]; observations:Observation[]; tasks:Task[]; conversations:Conversation[]; notifications:Notification[]; providers:{id:Provider; configured:boolean; model:string}[]; demo:boolean}
 export interface FieldInput {operationId:string; confirmed:true; name:string; crop:string; areaHa:number; center:Point; boundary:Point[]}
 export interface ObservationInput {id?:string; fieldId:string; note:string; extent?:string; location?:Point; photoIds:string[]; parentObservationId?:string; version?:number}
-export interface SyncOperation {operationId:string; type:'observation.upsert'|'observation.approve'|'task.complete'; payload:Record<string,unknown>}
+export interface SyncOperation {operationId:string; type:'field.create'|'observation.upsert'|'observation.approve'|'task.complete'; payload:Record<string,unknown>}
 export interface SyncResult {operationId:string; status:'applied'|'conflict'|'error'; data?:unknown; error?:string}
 export interface ApiError {error:string; code:string; current?:unknown}
 export class ApiClient {

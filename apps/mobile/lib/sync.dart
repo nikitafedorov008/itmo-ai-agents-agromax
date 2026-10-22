@@ -75,7 +75,9 @@ class SyncEngine {
           await store.update(
             id,
             e is ApiFailure && e.status == 409 ? 'conflict' : 'error',
-            error: e.toString(),
+            error: e is ApiFailure
+                ? e.message
+                : 'Нет связи с сервером. Повторите синхронизацию.',
             payload: payload,
           );
           break;
