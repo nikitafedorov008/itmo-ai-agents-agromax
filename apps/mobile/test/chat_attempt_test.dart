@@ -125,6 +125,7 @@ void main() {
           pending,
           fieldId: 'field',
           observationId: 'B',
+          explicitRetry: true,
           newId: () {
             idsGenerated++;
             return 'new';
@@ -152,6 +153,7 @@ void main() {
         pending,
         fieldId: 'field',
         observationId: 'A',
+        explicitRetry: true,
         newId: () => throw StateError('Must not allocate id'),
         provider: 'mimo',
       );
@@ -172,6 +174,49 @@ void main() {
         ),
         false,
       );
+    },
+  );
+  test(
+    'generic send cannot turn a same-context pending failure into a new paid attempt',
+    () {
+      final pending = <String, dynamic>{
+        'fieldId': 'field',
+        'observationId': 'A',
+        'message': 'Exact previous request',
+        'operationId': 'old',
+        'provider': 'deepseek',
+        '_terminalError': 'AGENT_ERROR',
+      };
+      var allocated = 0;
+      expect(
+        () => ChatAttempt.prepareForContext(
+          pending,
+          fieldId: 'field',
+          observationId: 'A',
+          newId: () {
+            allocated++;
+            return 'new';
+          },
+          provider: 'deepseek',
+        ),
+        throwsStateError,
+      );
+      expect(allocated, 0);
+      expect(pending['message'], 'Exact previous request');
+      final explicit = ChatAttempt.prepareForContext(
+        pending,
+        fieldId: 'field',
+        observationId: 'A',
+        explicitRetry: true,
+        newId: () {
+          allocated++;
+          return 'new';
+        },
+        provider: 'deepseek',
+      );
+      expect(allocated, 1);
+      expect(explicit['message'], 'Exact previous request');
+      expect(explicit['operationId'], 'new');
     },
   );
 }

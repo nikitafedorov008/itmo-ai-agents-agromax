@@ -65,6 +65,28 @@ void main() {
     },
   );
   testWidgets(
+    'history and weather context tiles invoke their actual callbacks',
+    (tester) async {
+      var history = 0, weather = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: EvidencePanel(
+              busy: false,
+              onHistory: () => history++,
+              onWeather: () => weather++,
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.textContaining('История поля'));
+      await tester.tap(find.textContaining('Погода'));
+      expect(history, 1);
+      expect(weather, 1);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
+  testWidgets(
     'iOS observation input uses native text field and clears after saved draft',
     (tester) async {
       await tester.pumpWidget(

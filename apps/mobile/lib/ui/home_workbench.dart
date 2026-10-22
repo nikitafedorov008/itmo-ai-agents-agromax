@@ -438,7 +438,14 @@ extension _Workbench on _HomeState {
             onExpand: expandMap,
           ),
         ),
-      EvidencePanel(reply: reply, busy: chatBusy),
+      EvidencePanel(
+        reply: reply,
+        busy: chatBusy,
+        onHistory: () =>
+            performArtifactAction('open_history', reply?['sources'] ?? []),
+        onWeather: () =>
+            performArtifactAction('open_weather', reply?['sources'] ?? []),
+      ),
       if (reply?['artifact']?['question'] != null)
         ...questionWidgets(reply!['artifact']['question']),
       if (reply != null) SourceDisclosure(sources: reply['sources'] ?? []),

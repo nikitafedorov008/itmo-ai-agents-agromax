@@ -251,9 +251,16 @@ class ObservationHero extends StatelessWidget {
 }
 
 class EvidencePanel extends StatelessWidget {
-  const EvidencePanel({super.key, this.reply, required this.busy});
+  const EvidencePanel({
+    super.key,
+    this.reply,
+    required this.busy,
+    this.onHistory,
+    this.onWeather,
+  });
   final Map? reply;
   final bool busy;
+  final VoidCallback? onHistory, onWeather;
   @override
   Widget build(BuildContext context) {
     final tools = List<String>.from(reply?['tools'] ?? []);
@@ -310,19 +317,7 @@ class EvidencePanel extends StatelessWidget {
               children: [
                 for (final entry in names.entries) ...[
                   if (entry.key != 'field_history') const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .08),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        '${tools.contains(entry.key) ? '✓' : '○'} ${entry.value}\n${tools.contains(entry.key) ? 'Получено из API' : 'Не запрошено в этом ответе'}',
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
-                  ),
+                  Expanded(child: _tile(entry.key, entry.value, tools)),
                 ],
               ],
             ),
@@ -368,6 +363,38 @@ class EvidencePanel extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _tile(String key, String title, List<String> tools) {
+    final onTap = key == 'field_history' ? onHistory : onWeather;
+    final content = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        '${tools.contains(key) ? '✓' : '○'} $title\n${tools.contains(key) ? 'Получено из API' : 'Не запрошено в этом ответе'}',
+        style: const TextStyle(fontSize: 13, color: Colors.white),
+      ),
+    );
+    if (onTap == null) return content;
+    return Semantics(
+      button: true,
+      label: title,
+      child: isIOS
+          ? CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: onTap,
+              child: content,
+            )
+          : InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(14),
+              child: content,
+            ),
     );
   }
 
