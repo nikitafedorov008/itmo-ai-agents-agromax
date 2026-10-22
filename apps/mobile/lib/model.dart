@@ -190,6 +190,24 @@ class AppModel extends Notifier<int> {
     changed();
   }
 
+  Future<void> restoreConflict(Map<String, dynamic> operation) async {
+    final payload = Map<String, dynamic>.from(operation['payload']);
+    await selectField(payload['fieldId']);
+    draft = {
+      for (final key in [
+        'note',
+        'extent',
+        'location',
+        'photoIds',
+        'localPhotos',
+      ])
+        if (payload[key] != null) key: payload[key],
+      'parentObservationId': payload['id'],
+    };
+    await store.set(draftKey, draft);
+    changed();
+  }
+
   Future<void> saveDraft(String fieldId) async {
     if ((draft['note'] ?? '').toString().trim().isEmpty) {
       throw Exception('Добавьте описание наблюдения');
@@ -199,7 +217,7 @@ class AppModel extends Notifier<int> {
       'fieldId': fieldId,
       'note': draft['note'],
       'extent': draft['extent'] ?? '',
-      'photoIds': <String>[],
+      'photoIds': List<String>.from(draft['photoIds'] ?? []),
       if (draft['location'] != null) 'location': draft['location'],
       if (draft['parentObservationId'] != null)
         'parentObservationId': draft['parentObservationId'],

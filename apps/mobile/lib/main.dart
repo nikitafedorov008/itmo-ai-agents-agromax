@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'api.dart';
+import 'chat_attempt.dart';
 import 'model.dart';
 import 'generated/api_routes.dart';
 import 'storage.dart';
@@ -622,6 +623,8 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
         ),
       ],
     ),
+    if ((model.draft['photoIds'] as List?)?.isNotEmpty == true)
+      Text('Сохранённых фото: ${(model.draft['photoIds'] as List).length}'),
     if (model.draft['location'] != null)
       Text('Координаты: ${model.draft['location']}'),
     for (final photo in List<String>.from(model.draft['localPhotos'] ?? []))
@@ -765,8 +768,18 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       ),
       FilledButton(
         onPressed: chatBusy || fieldId == null ? null : sendChat,
-        child: Text(chatRetry == null ? 'Отправить' : 'Повторить запрос'),
+        child: Text(
+          chatRetry == null
+              ? 'Отправить'
+              : ChatAttempt.isTerminal(chatRetry!)
+              ? 'Новая попытка'
+              : 'Повторить запрос',
+        ),
       ),
+      if (chatRetry != null && ChatAttempt.isTerminal(chatRetry!))
+        const Text(
+          'Предыдущая попытка завершилась ошибкой модели. Новая попытка создаст отдельный запрос; можно выбрать другого провайдера.',
+        ),
       if (chatRetry != null)
         TextButton(
           onPressed: () async {
@@ -833,12 +846,17 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       if (conversationId != null || history.isNotEmpty)
         'conversationId': conversationId ?? history.last['id'],
     };
+    final retryKey = 'chat-pending:${model.account}:$fieldId';
     try {
-      final retryKey = 'chat-pending:${model.account}:$fieldId';
       final saved = await model.store.get(retryKey);
       if (saved != null) {
         chatRetry = Map<String, dynamic>.from(saved);
       }
+      chatRetry = ChatAttempt.prepare(
+        chatRetry!,
+        newId: uuid.v4,
+        provider: provider,
+      );
       await model.store.set(retryKey, chatRetry);
       model.pendingChat = chatRetry;
       final result = await model.api.request(ApiRoutes.chat, chatRetry);
@@ -852,6 +870,13 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       chatRetry = null;
       message.clear();
       await model.refresh();
+    } catch (error) {
+      if (chatRetry != null) {
+        chatRetry = ChatAttempt.afterFailure(chatRetry!, error);
+        model.pendingChat = chatRetry;
+        await model.store.set(retryKey, chatRetry);
+      }
+      rethrow;
     } finally {
       if (mounted) {
         setState(() => chatBusy = false);
@@ -880,6 +905,21 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
             op['status'],
         '${op['type']}\n${op['payload']['note'] ?? op['payload']['outcome'] ?? op['payload']['id']}\n${op['error'] ?? ''}',
         actions: [
+          if (op['status'] == 'conflict' && op['type'] == 'observation.upsert')
+            TextButton(
+              onPressed: () => act(() async {
+                if (await confirm(
+                  'Открыть локальную версию?',
+                  'Она заменит текущий черновик этого поля. Исходная запись останется в очереди; сохранение создаст связанное повторное наблюдение.',
+                )) {
+                  await model.restoreConflict(op);
+                  setState(() => tab = 1);
+                }
+              }),
+              child: const Text(
+                'Открыть локальную версию как повторный осмотр',
+              ),
+            ),
           if (op['status'] == 'conflict')
             const Text(
               'Локальная версия сохранена. Обновите историю и создайте повторный осмотр с актуальными данными.',

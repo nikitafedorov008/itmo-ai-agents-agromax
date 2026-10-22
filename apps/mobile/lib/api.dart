@@ -10,10 +10,11 @@ const apiBase = String.fromEnvironment(
 );
 
 class ApiFailure implements Exception {
-  ApiFailure(this.status, this.message, [this.current]);
+  ApiFailure(this.status, this.message, [this.current, this.code]);
   final int status;
   final String message;
   final dynamic current;
+  final String? code;
   @override
   String toString() => message;
 }
@@ -42,6 +43,7 @@ class Api {
         r.statusCode,
         data['error']?.toString() ?? 'Ошибка API',
         data['current'],
+        data['code']?.toString(),
       );
     }
     return data;
@@ -68,6 +70,8 @@ class Api {
       throw ApiFailure(
         r.statusCode,
         data['error']?.toString() ?? 'Ошибка загрузки фото',
+        data['current'],
+        data['code']?.toString(),
       );
     }
     return data['id'] as String;
