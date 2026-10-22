@@ -24,6 +24,7 @@ import { apiFor, date, errorText, readSession, saveSession } from "./api";
 import { Auth } from "./Auth";
 import { FieldMap } from "./FieldMap";
 import { Chat } from "./Chat";
+import { reviewArtifact } from "./workbenchLogic";
 import { FieldForm } from "./FieldForm";
 import {
   ObservationDetail,
@@ -424,9 +425,9 @@ function Workspace({
                 data={data}
                 onRefresh={() => void refresh()}
                 observation={observation}
-                onAction={(action: ArtifactAction) => {
+                onAction={(action: ArtifactAction, currentArtifact?: AgentArtifact) => {
                   if (action === "start_revisit" && observation) newObservation(observation.id);
-                  else {if(action!=="review_observation")setArtifact(null); setPanel("detail"); setDetail(action === "open_history" ? "history" : action === "review_observation" && observation ? "observation" : "overview");}
+                  else {setArtifact(action === "review_observation" ? reviewArtifact(currentArtifact, observation) || null : null); setPanel("detail"); setDetail(action === "open_history" ? "history" : action === "review_observation" && observation ? "observation" : "overview");}
                 }}
                 onArtifact={showArtifact}
                 onObservation={() => newObservation()}
