@@ -53,7 +53,7 @@ return jsonb_build_object('farm',jsonb_build_object('id',f.id,'name',f.name),'de
 end $$;
 
 create function public.apply_operation(p_operation_id uuid,p_type text,p_payload jsonb) returns jsonb language plpgsql security definer set search_path=public as $$
-declare f uuid:=current_farm(); old jsonb; result jsonb; fp jsonb:=jsonb_build_object('type',p_type,'payload',p_payload); rid uuid; v integer; field uuid; task jsonb; role_name text; photo text; tstamp text:=to_char(now() at time zone 'utc','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+declare f uuid:=current_farm(); old jsonb; result jsonb; fp jsonb:=jsonb_build_object('type',p_type,'payload',p_payload); rid uuid; v integer; field uuid; task jsonb; role_name text; photo text; geom extensions.geometry; coords jsonb; tstamp text:=to_char(now() at time zone 'utc','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
 begin
 if f is null then return jsonb_build_object('error','Нет доступа','code','UNAUTHORIZED','status',401); end if;
 perform pg_advisory_xact_lock(hashtextextended(f::text||p_operation_id::text,0));
@@ -67,7 +67,7 @@ if jsonb_typeof(p_payload)<>'object' or p_operation_id is null then return jsonb
 if p_type='observation.upsert' then
 if coalesce(length(trim(p_payload->>'note')),0) not between 1 and 10000 or jsonb_typeof(p_payload->'photoIds') is distinct from 'array' or jsonb_array_length(p_payload->'photoIds')>20 or p_payload->>'fieldId' is null then return jsonb_build_object('error','Неверное наблюдение','code','INVALID','status',400); end if;
 if p_payload ? 'location' and (jsonb_typeof(p_payload->'location'->'lat') is distinct from 'number' or jsonb_typeof(p_payload->'location'->'lng') is distinct from 'number' or (p_payload->'location'->>'lat')::numeric not between -90 and 90 or (p_payload->'location'->>'lng')::numeric not between -180 and 180) then return jsonb_build_object('error','Неверная геопозиция','code','INVALID','status',400); end if;
-else
+elsif p_type<>'field.create' then
 if p_payload->>'id' is null or coalesce((p_payload->>'version')::integer,0)<1 then return jsonb_build_object('error','Нужны id и версия','code','INVALID','status',400); end if;
 end if;
 if p_type='observation.approve' and p_payload ? 'task' then
@@ -77,7 +77,22 @@ end if;
 if p_type='task.complete' and coalesce(length(trim(p_payload->>'outcome')),0) not between 1 and 5000 then return jsonb_build_object('error','Нужен результат выполнения','code','INVALID','status',400); end if;
 select role into role_name from members where user_id=auth.uid();
 rid:=(p_payload->>'id')::uuid;
-if p_type='observation.upsert' then
+if p_type='field.create' then
+if role_name<>'chief' then return jsonb_build_object('error','Добавление поля доступно руководителю','code','FORBIDDEN','status',403); end if;
+if p_payload->'confirmed' is distinct from 'true'::jsonb then return jsonb_build_object('error','Нужно явное подтверждение','code','CONFIRMATION_REQUIRED','status',400); end if;
+if coalesce(length(trim(p_payload->>'name')),0) not between 1 and 120 or coalesce(length(trim(p_payload->>'crop')),0) not between 1 and 120 or coalesce((p_payload->>'areaHa')::numeric,0) not between 0.000001 and 1000000 or jsonb_typeof(p_payload->'boundary') is distinct from 'array' then return jsonb_build_object('error','Неверное поле','code','INVALID','status',400); end if;
+if jsonb_array_length(p_payload->'boundary')<>0 and jsonb_array_length(p_payload->'boundary') not between 3 and 200 then return jsonb_build_object('error','Нужен контур от 3 до 200 точек','code','INVALID','status',400); end if;
+if exists(select 1 from jsonb_array_elements(p_payload->'boundary') p where jsonb_typeof(p->'lat') is distinct from 'number' or jsonb_typeof(p->'lng') is distinct from 'number' or (p->>'lat')::numeric not between -90 and 90 or (p->>'lng')::numeric not between -180 and 180) or jsonb_typeof(p_payload->'center'->'lat') is distinct from 'number' or jsonb_typeof(p_payload->'center'->'lng') is distinct from 'number' or (p_payload->'center'->>'lat')::numeric not between -90 and 90 or (p_payload->'center'->>'lng')::numeric not between -180 and 180 then return jsonb_build_object('error','Неверные координаты','code','INVALID','status',400); end if;
+if jsonb_array_length(p_payload->'boundary')>0 then
+select jsonb_agg(jsonb_build_array((p->>'lng')::numeric,(p->>'lat')::numeric)) into coords from jsonb_array_elements(p_payload->'boundary') p;
+if coords->0<>coords->(jsonb_array_length(coords)-1) then coords:=coords||jsonb_build_array(coords->0); end if;
+geom:=extensions.ST_SetSRID(extensions.ST_GeomFromGeoJSON(jsonb_build_object('type','Polygon','coordinates',jsonb_build_array(coords))::text),4326);
+if not extensions.ST_IsValid(geom) or extensions.ST_IsEmpty(geom) or extensions.ST_Area(geom)<=0 or not extensions.ST_Covers(geom,extensions.ST_SetSRID(extensions.ST_MakePoint((p_payload->'center'->>'lng')::numeric,(p_payload->'center'->>'lat')::numeric),4326)) then return jsonb_build_object('error','Контур должен быть простым и содержать центр','code','INVALID','status',400); end if;
+end if;
+rid:=gen_random_uuid();
+result:=(p_payload-'confirmed')||jsonb_build_object('id',rid,'demo',(select demo from farms where id=f));
+insert into fields(id,farm_id,data,boundary) values(rid,f,result,geom);
+elsif p_type='observation.upsert' then
 field:=(p_payload->>'fieldId')::uuid;
 if not exists(select 1 from fields where id=field and farm_id=f) then return jsonb_build_object('error','Поле не найдено','code','NOT_FOUND','status',404); end if;
 if rid is null then rid:=gen_random_uuid(); end if;
@@ -133,6 +148,7 @@ create function public.register_photo(p_id uuid,p_name text,p_mime text) returns
 declare f uuid:=current_farm(); result jsonb;
 begin
 if f is null then raise exception 'unauthorized'; end if;
+if p_mime not in ('image/jpeg','image/png','image/webp') then raise exception 'invalid image type'; end if;
 result:=jsonb_build_object('id',p_id,'name',left(p_name,180),'mimeType',p_mime,'url','/api/photos/'||p_id);
 insert into photos(id,farm_id,path,data) values(p_id,f,f::text||'/'||p_id,result);
 return result;
