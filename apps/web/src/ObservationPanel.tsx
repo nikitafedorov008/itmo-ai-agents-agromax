@@ -10,6 +10,7 @@ import {
   type Task,
 } from "@agromax/contracts";
 import { ORIGIN, date, errorText, operationId, clearOperation } from "./api";
+import { photoOperationKey } from "./photoUpload";
 export function PrivatePhoto({ id, api }: { id: string; api: ApiClient }) {
   const [url, setUrl] = useState(""),
     [failed, setFailed] = useState(false);
@@ -72,11 +73,16 @@ export function ObservationForm({
     try {
       const form = new FormData();
       form.append("file", file);
+      const key = await photoOperationKey(fieldId, file);
+      form.append("operationId", operationId(key));
       const photo = await api.request<Photo>("/api/photos", {
         method: "POST",
         body: form,
       });
-      setPhotos((p) => [...p, photo]);
+      // Retain the upload key after success: reselecting the same file reuses its photo.
+      setPhotos((p) =>
+        p.some((item) => item.id === photo.id) ? p : [...p, photo],
+      );
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -163,7 +169,11 @@ export function ObservationForm({
             accept="image/jpeg,image/png,image/webp"
             capture="environment"
             disabled={busy}
-            onChange={(e) => upload(e.target.files?.[0])}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              void upload(file);
+            }}
           />
         </label>
         <button type="button" className="outline" onClick={gps}>

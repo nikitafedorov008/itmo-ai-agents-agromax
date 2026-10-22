@@ -24,6 +24,9 @@ test("permits explicit new attempt after server confirms terminal provider or ag
     response(409, "AGENT_TIMEOUT"),
     response(409, "RUN_INTERRUPTED"),
     response(409, "AGENT_FAILED"),
+    response(502, "WEATHER_UNAVAILABLE"),
+    response(409, "WEATHER_UNAVAILABLE"),
+    response(409, "DATABASE_UNAVAILABLE"),
   ]) {
     assert.equal(isTerminalAgentFailure(failure), true);
   }
