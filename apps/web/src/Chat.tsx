@@ -8,8 +8,10 @@ import {
   type Conversation,
   type Field,
   type Provider,
+  type Observation,
 } from "@agromax/contracts";
 import { clearOperation, errorText, operationId } from "./api";
+import { isTerminalAgentFailure } from "./chatRetry";
 export function Chat({
   api,
   field,
@@ -17,6 +19,7 @@ export function Chat({
   onRefresh,
   onArtifact,
   onObservation,
+  observation,
 }: {
   api: ApiClient;
   field: Field;
@@ -24,6 +27,7 @@ export function Chat({
   onRefresh: () => void;
   onArtifact: (a: AgentArtifact) => void;
   onObservation: () => void;
+  observation?: Observation;
 }) {
   const conversations = data.conversations.filter(
     (c) => c.fieldId === field.id,
@@ -34,7 +38,8 @@ export function Chat({
     [provider, setProvider] = useState<Provider>("deepseek"),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [terminalKey, setTerminalKey] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const abort = useRef<AbortController | null>(null);
   const active = useRef(true);
@@ -46,23 +51,30 @@ export function Chat({
     };
   }, []);
   const conversation = conversations.find((c) => c.id === conversationId);
-  useEffect(
-    () =>
-      bottom.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
-    [conversation?.messages.length, busy],
-  );
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [conversation?.messages.length, busy]);
+  const payload = {
+    fieldId: field.id,
+    conversationId,
+    message: message.trim(),
+    provider,
+    observationId: observation?.id,
+  };
+  const currentKey = "chat:" + JSON.stringify(payload);
+  const needsNewAttempt = terminalKey === currentKey;
   async function send(e: FormEvent) {
     e.preventDefault();
+    await sendMessage(false);
+  }
+  async function sendMessage(newAttempt: boolean) {
+    if (needsNewAttempt && !newAttempt) return;
+    if (newAttempt) clearOperation(currentKey);
     if (!message.trim() || busy) return;
     setBusy(true);
     setError("");
-    const payload = {
-      fieldId: field.id,
-      conversationId,
-      message: message.trim(),
-      provider,
-    };
-    const key = "chat:" + JSON.stringify(payload);
+    setTerminalKey(null);
+    const key = currentKey;
     const controller = new AbortController();
     abort.current = controller;
     try {
@@ -84,8 +96,10 @@ export function Chat({
       if (
         active.current &&
         !(e instanceof DOMException && e.name === "AbortError")
-      )
+      ) {
         setError(errorText(e));
+        if (isTerminalAgentFailure(e)) setTerminalKey(key);
+      }
     } finally {
       if (active.current) setBusy(false);
     }
@@ -103,6 +117,7 @@ export function Chat({
         <button
           className="icon-button"
           aria-label="Новый разговор"
+          disabled={busy}
           onClick={() => {
             setConversationId(undefined);
             setError("");
@@ -118,6 +133,7 @@ export function Chat({
         {field.crop}
         <select
           aria-label="Модель помощника"
+          disabled={busy}
           value={provider}
           onChange={(e) => setProvider(e.target.value as Provider)}
         >
@@ -125,10 +141,17 @@ export function Chat({
           <option value="mimo">MiMo</option>
         </select>
       </div>
+      {observation && (
+        <p className="selected-observation">
+          Контекст: наблюдение от{" "}
+          {new Date(observation.createdAt).toLocaleDateString("ru-RU")}
+        </p>
+      )}
       {conversations.length > 0 && (
         <select
           className="history-select"
           aria-label="История разговоров"
+          disabled={busy}
           value={conversationId || ""}
           onChange={(e) => setConversationId(e.target.value || undefined)}
         >
@@ -223,13 +246,37 @@ export function Chat({
           Наблюдение с фото
         </button>
         {error && (
-          <p className="error" role="alert">
-            {error} Повторная отправка сохранит тот же идентификатор операции.
-          </p>
+          <div className="error" role="alert">
+            <p>{error}</p>
+            {needsNewAttempt ? (
+              <>
+                <p>
+                  Попытка завершилась с ошибкой. Провайдер мог уже списать
+                  оплату, особенно при тайм-ауте. Новая попытка отправит
+                  отдельный запрос и может тарифицироваться повторно.
+                </p>
+                <button
+                  type="button"
+                  className="outline"
+                  disabled={busy}
+                  onClick={() => void sendMessage(true)}
+                >
+                  Отправить как новую попытку
+                </button>
+              </>
+            ) : (
+              <p>
+                Повторная отправка проверит тот же запрос без создания новой
+                операции. При сетевой ошибке или выполняющемся запросе дождитесь
+                результата.
+              </p>
+            )}
+          </div>
         )}
         <form onSubmit={send}>
           <textarea
             aria-label="Сообщение помощнику"
+            disabled={busy}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Опишите, что заметили на поле…"
@@ -245,7 +292,7 @@ export function Chat({
           <button
             aria-label="Отправить сообщение"
             className="send"
-            disabled={busy || !message.trim()}
+            disabled={busy || !message.trim() || needsNewAttempt}
           >
             <ArrowUp size={20} />
           </button>
