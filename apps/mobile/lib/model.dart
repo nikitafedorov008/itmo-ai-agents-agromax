@@ -77,7 +77,11 @@ class AppModel extends Notifier<int> {
             : ApiRoutes.login,
         mode == 'demo'
             ? {}
-            : {'email': email, 'password': password, 'name': name},
+            : {
+                'email': email,
+                'password': password,
+                if (mode == 'signup') 'name': name,
+              },
       );
       if (result['accessToken'] == null) {
         throw Exception('Подтвердите почту перед входом');

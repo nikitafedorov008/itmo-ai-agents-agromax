@@ -266,6 +266,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: fieldId,
                 decoration: const InputDecoration(labelText: 'Поле'),
                 items: fields
@@ -274,6 +275,8 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
                         value: f['id'],
                         child: Text(
                           '${f['name']} · ${f['crop']} · ${f['areaHa']} га',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     )

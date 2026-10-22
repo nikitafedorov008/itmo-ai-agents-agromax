@@ -36,7 +36,7 @@ class Api {
         await (body == null
                 ? http.get(uri, headers: headers)
                 : http.post(uri, headers: headers, body: jsonEncode(body)))
-            .timeout(const Duration(seconds: 30));
+            .timeout(Duration(seconds: path == ApiRoutes.chat ? 75 : 30));
     final data = jsonDecode(r.body) as Map<String, dynamic>;
     if (r.statusCode >= 400) {
       throw ApiFailure(
