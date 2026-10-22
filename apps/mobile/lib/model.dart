@@ -24,6 +24,7 @@ class AppModel extends Notifier<int> {
   Map<String, dynamic> data = {};
   Map<String, dynamic> draft = {};
   String? activeField;
+  String? activeObservation;
   Map<String, dynamic>? pendingChat;
   Map<String, String> conversationContexts = {};
   String get draftKey => 'draft:$account:${activeField ?? 'new'}';
@@ -54,6 +55,9 @@ class AppModel extends Notifier<int> {
 
   Future<void> loadLocal() async {
     activeField = await store.get('activeField:$account');
+    activeObservation = await store.get(
+      'chat-active-observation:$account:$activeField',
+    );
     data = Map<String, dynamic>.from(await store.get('cache:$account') ?? {});
     draft = Map<String, dynamic>.from(await store.get(draftKey) ?? {});
     queue = await store.queue(account);
@@ -106,6 +110,7 @@ class AppModel extends Notifier<int> {
 
   Future<void> logout() async {
     session = null;
+    activeObservation = null;
     data = {};
     draft = {};
     queue = [];
@@ -157,6 +162,7 @@ class AppModel extends Notifier<int> {
 
   Future<void> selectField(String id) async {
     activeField = id;
+    activeObservation = await store.get('chat-active-observation:$account:$id');
     pendingChat = await store.get('chat-pending:$account:$id');
     conversationContexts = Map<String, String>.from(
       await store.get('chat-contexts:$account:$id') ?? {},

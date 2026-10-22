@@ -256,6 +256,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
     }
     final fields = items('fields');
     fieldId = model.activeField ?? fieldId;
+    observationId ??= model.activeObservation;
     if (!fields.any((f) => f['id'] == fieldId)) {
       fieldId = fields.firstOrNull?['id'];
     }
