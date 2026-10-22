@@ -1,10 +1,143 @@
-import {useState,type FormEvent} from 'react';
-import {ArrowUpRight,Leaf,ShieldCheck} from 'lucide-react';
-import type {Session} from '@agromax/contracts';
-import {apiFor,errorText} from './api';
-export function Auth({onSession}:{onSession:(s:Session)=>void}){
- const [mode,setMode]=useState<'login'|'signup'>('login'),[busy,setBusy]=useState(false),[error,setError]=useState('');
- async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();const form=new FormData(e.currentTarget);await enter(mode,{email:form.get('email'),password:form.get('password'),name:form.get('name')});}
- async function enter(path:string,body:unknown){setBusy(true);setError('');try{const s=await apiFor(null).request<Session>('/api/auth/'+path,{method:'POST',body:JSON.stringify(body)});if(!s.accessToken)throw new Error('Подтвердите email, затем войдите в систему.');onSession(s);}catch(e){setError(errorText(e));}finally{setBusy(false);}}
- return <main className="auth"><section className="auth-story"><img src="/agromax-logo.svg" alt="AGROMAX"/><span className="eyebrow">РАБОЧЕЕ МЕСТО АГРОНОМА</span><h1>От наблюдения<br/>к уверенному<br/><em>решению.</em></h1><p>Поле, история и помощник — в одном контексте. Каждое действие остаётся под вашим контролем.</p><div className="auth-lines"><Leaf size={22}/><span>Заметить → разобраться → подтвердить → проверить</span></div><small>AGROMAX / Цифровая агрономия</small></section><section className="auth-form"><div className="auth-box"><span className="eyebrow">ДОБРО ПОЖАЛОВАТЬ</span><h2>{mode==='login'?'Вернуться к полям':'Создать хозяйство'}</h2><p className="muted">Начните рабочий день с полной картины.</p><div className="switch"><button className={mode==='login'?'active':''} onClick={()=>setMode('login')}>Вход</button><button className={mode==='signup'?'active':''} onClick={()=>setMode('signup')}>Регистрация</button></div><form onSubmit={submit}>{mode==='signup'&&<label>Название хозяйства<input name="name" required autoComplete="organization" placeholder="Ваше хозяйство"/></label>}<label>Электронная почта<input name="email" type="email" required autoComplete="email" placeholder="agronom@farm.ru"/></label><label>Пароль<input name="password" type="password" minLength={8} required autoComplete={mode==='login'?'current-password':'new-password'} placeholder="Не менее 8 символов"/></label>{error&&<p className="error" role="alert">{error}</p>}<button className="primary wide" disabled={busy}>{busy?'Подключаемся…':mode==='login'?'Войти в AGROMAX':'Зарегистрироваться'}<ArrowUpRight size={18}/></button></form><div className="divider">или познакомьтесь с продуктом</div><button className="outline wide" disabled={busy} onClick={()=>enter('demo',{})}>Открыть демохозяйство <ArrowUpRight size={17}/></button><p className="fine"><ShieldCheck size={16}/>Демо создаёт отдельное хозяйство с учебными полями. ИИ работает при подключённом провайдере.</p></div></section></main>;
+import { useState, type FormEvent } from "react";
+import { ArrowUpRight, Leaf, ShieldCheck } from "lucide-react";
+import type { Session } from "@agromax/contracts";
+import { apiFor, errorText } from "./api";
+export function Auth({ onSession }: { onSession: (s: Session) => void }) {
+  const [mode, setMode] = useState<"login" | "signup">("login"),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    await enter(mode, {
+      email: form.get("email"),
+      password: form.get("password"),
+      name: form.get("name"),
+    });
+  }
+  async function enter(path: string, body: unknown) {
+    setBusy(true);
+    setError("");
+    try {
+      const s = await apiFor(null).request<Session>("/api/auth/" + path, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (!s.accessToken)
+        throw new Error("Подтвердите email, затем войдите в систему.");
+      onSession(s);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="auth">
+      <section className="auth-story">
+        <img src="/agromax-logo.svg" alt="AGROMAX" />
+        <span className="eyebrow">РАБОЧЕЕ МЕСТО АГРОНОМА</span>
+        <h1>
+          От наблюдения
+          <br />к уверенному
+          <br />
+          <em>решению.</em>
+        </h1>
+        <p>
+          Поле, история и помощник — в одном контексте. Каждое действие остаётся
+          под вашим контролем.
+        </p>
+        <div className="auth-lines">
+          <Leaf size={22} />
+          <span>Заметить → разобраться → подтвердить → проверить</span>
+        </div>
+        <small>AGROMAX / Цифровая агрономия</small>
+      </section>
+      <section className="auth-form">
+        <div className="auth-box">
+          <span className="eyebrow">ДОБРО ПОЖАЛОВАТЬ</span>
+          <h2>
+            {mode === "login" ? "Вернуться к полям" : "Создать хозяйство"}
+          </h2>
+          <p className="muted">Начните рабочий день с полной картины.</p>
+          <div className="switch">
+            <button
+              className={mode === "login" ? "active" : ""}
+              onClick={() => setMode("login")}
+            >
+              Вход
+            </button>
+            <button
+              className={mode === "signup" ? "active" : ""}
+              onClick={() => setMode("signup")}
+            >
+              Регистрация
+            </button>
+          </div>
+          <form onSubmit={submit}>
+            {mode === "signup" && (
+              <label>
+                Название хозяйства
+                <input
+                  name="name"
+                  required
+                  autoComplete="organization"
+                  placeholder="Ваше хозяйство"
+                />
+              </label>
+            )}
+            <label>
+              Электронная почта
+              <input
+                name="email"
+                type="email"
+                required
+                autoComplete="email"
+                placeholder="agronom@farm.ru"
+              />
+            </label>
+            <label>
+              Пароль
+              <input
+                name="password"
+                type="password"
+                minLength={8}
+                required
+                autoComplete={
+                  mode === "login" ? "current-password" : "new-password"
+                }
+                placeholder="Не менее 8 символов"
+              />
+            </label>
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+            <button className="primary wide" disabled={busy}>
+              {busy
+                ? "Подключаемся…"
+                : mode === "login"
+                  ? "Войти в AGROMAX"
+                  : "Зарегистрироваться"}
+              <ArrowUpRight size={18} />
+            </button>
+          </form>
+          <div className="divider">или познакомьтесь с продуктом</div>
+          <button
+            className="outline wide"
+            disabled={busy}
+            onClick={() => enter("demo", {})}
+          >
+            Открыть демохозяйство <ArrowUpRight size={17} />
+          </button>
+          <p className="fine">
+            <ShieldCheck size={16} />
+            Демо создаёт отдельное хозяйство с учебными полями. ИИ работает при
+            подключённом провайдере.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
 }

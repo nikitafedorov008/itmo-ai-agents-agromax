@@ -1,22 +1,668 @@
-import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {Bell,LogOut,Map,MessageSquare,ClipboardList,Plus,CloudSun,RefreshCw,ArrowUpRight,Check,Leaf} from 'lucide-react';
-import type {AgentArtifact,Bootstrap,Observation,Session,Weather} from '@agromax/contracts';
-import {apiFor,date,errorText,readSession,saveSession} from './api';
-import {Auth} from './Auth';
-import {FieldMap} from './FieldMap';
-import {Chat} from './Chat';
-import {ObservationDetail,ObservationForm,TaskCard} from './ObservationPanel';
-export default function App(){const [session,setSession]=useState<Session|null>(readSession);function set(s:Session|null){saveSession(s);setSession(s);}return session?<Workspace key={session.accessToken} session={session} logout={()=>set(null)}/>:<Auth onSession={set}/>;}
-function Workspace({session,logout}:{session:Session;logout:()=>void}){
- const api=useMemo(()=>apiFor(session),[session]);const [data,setData]=useState<Bootstrap|null>(null),[error,setError]=useState(''),[fieldId,setFieldId]=useState(''),[weather,setWeather]=useState<Weather|null>(null),[weatherError,setWeatherError]=useState(''),[panel,setPanel]=useState<'fields'|'chat'|'detail'>('chat'),[detail,setDetail]=useState<'overview'|'observation'|'new'|'history'|'tasks'>('overview'),[observationId,setObservationId]=useState(''),[parent,setParent]=useState<string|undefined>(),[artifact,setArtifact]=useState<AgentArtifact|null>(null),[notifications,setNotifications]=useState(false),[loading,setLoading]=useState(true);const alive=useRef(true),controllers=useRef<Set<AbortController>>(new Set());
- const refresh=useCallback(async()=>{const c=new AbortController();controllers.current.add(c);try{const result=await api.request<Bootstrap>('/api/bootstrap',{signal:c.signal});if(alive.current){setData(result);setFieldId(id=>id||result.fields[0]?.id||'');setError('');}}catch(e){if(alive.current&&!(e instanceof DOMException&&e.name==='AbortError'))setError(errorText(e));}finally{controllers.current.delete(c);if(alive.current)setLoading(false);}},[api]);
- useEffect(()=>{alive.current=true;void refresh();const timer=setInterval(()=>void refresh(),30000);return()=>{alive.current=false;clearInterval(timer);controllers.current.forEach(c=>c.abort());controllers.current.clear();};},[refresh]);
- useEffect(()=>{setWeather(null);setWeatherError('');if(!fieldId)return;let valid=true;const c=new AbortController();controllers.current.add(c);api.request<Weather>('/api/fields/'+fieldId+'/weather',{signal:c.signal}).then(w=>{if(valid)setWeather(w);}).catch(e=>{if(valid)setWeatherError(errorText(e));});return()=>{valid=false;c.abort();controllers.current.delete(c);};},[api,fieldId]);
- const selectField=useCallback((id:string)=>{setFieldId(id);setDetail('overview');setArtifact(null);},[]);
- const field=data?.fields.find(f=>f.id===fieldId),observation=data?.observations.find(o=>o.id===observationId),tasks=data?.tasks.filter(t=>t.fieldId===fieldId)||[],observations=data?.observations.filter(o=>o.fieldId===fieldId)||[];
- function newObservation(parentId?:string){setParent(parentId);setDetail('new');setPanel('detail');setArtifact(null);}
- function openObservation(o:Observation){setObservationId(o.id);setDetail('observation');setPanel('detail');setArtifact(null);}
- async function markRead(id:string){try{await api.request('/api/notifications/'+id+'/read',{method:'POST',body:'{}'});await refresh();}catch(e){setError(errorText(e));}}
- function showArtifact(a:AgentArtifact){setArtifact(a);setDetail('overview');setPanel('detail');if(a.observationId){setObservationId(a.observationId);setDetail('observation');}}
- return <div className="workspace"><header className="topbar"><a className="brand" href="#" aria-label="AGROMAX главная"><img src="/agromax-logo.svg" alt="AGROMAX"/></a><span className="topbar-divider"/><div className="farm-name"><span className="eyebrow">ХОЗЯЙСТВО</span><strong>{session.farm.name}</strong></div><div className="topbar-actions">{session.demo&&<span className="demo-pill">Деморежим</span>}<button className="icon-button notification-button" aria-label="Уведомления" aria-expanded={notifications} onClick={()=>setNotifications(!notifications)}><Bell size={19}/>{data?.notifications.some(n=>!n.read)&&<i/>}</button><span className="avatar" title={session.user.email||'Агроном'}>АГ</span><button className="icon-button" aria-label="Выйти из аккаунта" onClick={logout}><LogOut size={19}/></button></div></header>{notifications&&<section className="notification-popover"><div className="section-heading"><h2>Уведомления</h2><button className="text-button" onClick={()=>setNotifications(false)}>Закрыть</button></div>{!data?.notifications.length&&<p className="muted">Пока нет новых событий. Здесь появятся напоминания и изменения по полям.</p>}{data?.notifications.map(n=><article className={n.read?'read':''} key={n.id}><small>{date(n.createdAt)} · {n.read?'Прочитано':'Новое'}</small><h3>{n.title}</h3><p>{n.body}</p><div className="button-row">{n.fieldId&&<button className="text-button" onClick={()=>{selectField(n.fieldId!);setNotifications(false);}}>Открыть поле</button>}{!n.read&&<button className="text-button" onClick={()=>markRead(n.id)}>Прочитано <Check size={13}/></button>}</div></article>)}</section>}<div className="workspace-heading"><div><span className="eyebrow">ПОЛЕВОЙ КОНТРОЛЬ</span><h1>Ваши поля. Ясная картина.</h1></div><div className="today"><span className="context-dot"/>{new Date().toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})}<button className="icon-button" onClick={()=>void refresh()} aria-label="Обновить данные"><RefreshCw size={15}/></button></div></div>{error&&<div className="global-error" role="alert">{error}<button className="text-button" onClick={()=>void refresh()}>Повторить</button></div>}{loading?<div className="loading-state" role="status"><Leaf size={30}/><h2>Загружаем хозяйство…</h2><p>Поля, наблюдения и история решений</p></div>:!data?<div className="loading-state"><h2>Хозяйство недоступно</h2><p>Проверьте подключение к API и повторите загрузку.</p><button className="primary" onClick={()=>void refresh()}>Повторить</button></div>:!field?<div className="loading-state"><h2>В хозяйстве пока нет полей</h2><p>Обратитесь к руководителю хозяйства для добавления контуров.</p></div>:<><nav className="mobile-tabs" aria-label="Разделы рабочего места">{[['fields','Поля',Map],['chat','Помощник',MessageSquare],['detail','Материалы',ClipboardList]].map(([id,title,Icon])=><button key={id as string} className={panel===id?'active':''} onClick={()=>setPanel(id as typeof panel)}>{typeof Icon!=='string'&&<Icon size={17}/ >}{title as string}</button>)}</nav><main className="work-grid"><aside className={'fields-panel mobile-'+(panel==='fields'?'show':'hide')}><div className="panel-header"><div><span className="eyebrow">КОНТУРЫ ХОЗЯЙСТВА</span><h2>Поля <span className="count">{data.fields.length}</span></h2></div><Map size={19}/></div><div className="map-wrap"><FieldMap fields={data.fields} selected={fieldId} onSelect={selectField}/>{data.demo&&<span className="map-caption">Учебные контуры · синтетические</span>}</div><div className="field-list">{data.fields.map((f,i)=><button className={'field-row '+(f.id===fieldId?'selected':'')} key={f.id} onClick={()=>selectField(f.id)}><span className="field-number">{String(i+1).padStart(2,'0')}</span><span><strong>{f.name}</strong><small>{f.crop} · {f.areaHa.toLocaleString('ru-RU')} га</small></span><ArrowUpRight size={17}/></button>)}</div><div className="field-footer"><span>Общая площадь</span><strong>{data.fields.reduce((n,f)=>n+f.areaHa,0).toLocaleString('ru-RU')} га</strong></div></aside><div className={'chat-column mobile-'+(panel==='chat'?'show':'hide')}><Chat key={fieldId} api={api} field={field} data={data} onRefresh={()=>void refresh()} onArtifact={showArtifact} onObservation={()=>newObservation()}/></div><aside className={'context-panel mobile-'+(panel==='detail'?'show':'hide')}><div className="panel-header"><div><span className="eyebrow">КОНТЕКСТ И МАТЕРИАЛЫ</span><h2>{field.name}</h2></div><ClipboardList size={19}/></div><nav className="context-tabs" aria-label="Материалы поля"><button className={detail==='overview'?'active':''} onClick={()=>{setDetail('overview');setArtifact(null);}}>Обзор</button><button className={detail==='history'?'active':''} onClick={()=>{setDetail('history');setArtifact(null);}}>История <span>{observations.length}</span></button><button className={detail==='tasks'?'active':''} onClick={()=>{setDetail('tasks');setArtifact(null);}}>Задачи <span>{tasks.filter(t=>t.status==='open').length}</span></button></nav><div className="context-content">{detail==='new'?<ObservationForm key={fieldId+(parent||'')} api={api} fieldId={fieldId} parent={parent} onCancel={()=>setDetail('overview')} onSaved={o=>{void refresh();openObservation(o);}}/>:detail==='observation'&&observation?<ObservationDetail key={observation.id+observation.version} api={api} observation={observation} onChange={()=>void refresh()} onRevisit={()=>newObservation(observation.id)}/>:detail==='history'?<><h3>История наблюдений</h3>{observations.length===0?<p className="empty">Первое наблюдение станет началом истории поля.</p>:observations.slice().sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(o=><button key={o.id} className="observation-row" onClick={()=>openObservation(o)}><span className="eyebrow">{date(o.createdAt)} · {o.status==='approved'?'Подтверждено':'Черновик'}</span><p>{o.note}</p><span className="text-link">Открыть запись ↗</span></button>)}<button className="outline wide" onClick={()=>newObservation()}><Plus size={16}/>Добавить наблюдение</button></>:detail==='tasks'?<><h3>Работы и проверки</h3>{tasks.length===0&&<p className="empty">Задачи появятся после подтверждения наблюдения.</p>}{tasks.map(t=><TaskCard key={t.id+t.version} api={api} task={t} onChange={()=>void refresh()} onRevisit={()=>newObservation(t.observationId)}/>)}</>:artifact?<div className="artifact"><span className="eyebrow">МАТЕРИАЛ ПОМОЩНИКА</span><h3>{artifact.title}</h3><p className="prewrap">{artifact.body}</p>{artifact.proposedTask&&<p className="callout">Предлагаемая задача: {artifact.proposedTask.title} · {date(artifact.proposedTask.dueAt)}</p>}<p className="fine">Это предложение ИИ. Проверьте сведения и сохраните наблюдение для отдельного подтверждения.</p><button className="primary wide" onClick={()=>newObservation()}>Записать наблюдение <Plus size={16}/></button></div>:<><div className="field-summary"><span className="crop-icon"><Leaf size={23}/></span><div><h3>{field.crop}</h3><p>{field.areaHa} га · {field.demo?'Учебное поле':'Поле хозяйства'}</p></div></div><section className="weather"><div className="section-heading"><h3><CloudSun size={18}/>Погода на поле</h3><span className="live-tag">API</span></div>{weather?<><div className="weather-days">{weather.days.slice(0,3).map(d=><div key={d.date}><small>{date(d.date)}</small><strong>{Math.round(d.maxC)}°</strong><span>{Math.round(d.minC)}° · {d.rainMm} мм</span></div>)}</div><small className="weather-source">{weather.source} · {new Date(weather.fetchedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</small></>:<p className="muted">{weatherError||'Загружаем прогноз…'}</p>}</section><div className="stat-row"><div><strong>{observations.length}</strong><span>наблюдений</span></div><div><strong>{tasks.filter(t=>t.status==='open').length}</strong><span>открытых задач</span></div></div><div className="next-step"><span className="eyebrow">НАЧНИТЕ С ФАКТОВ</span><h3>Увидели изменение?<br/>Зафиксируйте его.</h3><p>Фото, координаты и короткая заметка сохранят контекст для решения.</p><button className="primary wide" onClick={()=>newObservation()}><Plus size={17}/>Новое наблюдение</button></div><div className="workflow"><span>01 Наблюдение</span><span>02 Решение</span><span>03 Проверка</span></div></>}</div><footer className="context-footer"><span className="context-dot"/>Изменения сохраняются в хозяйстве</footer></aside></main></>}</div>;
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Bell,
+  LogOut,
+  Map,
+  MessageSquare,
+  ClipboardList,
+  Plus,
+  CloudSun,
+  RefreshCw,
+  ArrowUpRight,
+  Check,
+  Leaf,
+} from "lucide-react";
+import type {
+  AgentArtifact,
+  Bootstrap,
+  Observation,
+  Session,
+  Weather,
+} from "@agromax/contracts";
+import { apiFor, date, errorText, readSession, saveSession } from "./api";
+import { Auth } from "./Auth";
+import { FieldMap } from "./FieldMap";
+import { Chat } from "./Chat";
+import { FieldForm } from "./FieldForm";
+import {
+  ObservationDetail,
+  ObservationForm,
+  TaskCard,
+} from "./ObservationPanel";
+export default function App() {
+  const [session, setSession] = useState<Session | null>(readSession);
+  function set(s: Session | null) {
+    saveSession(s);
+    setSession(s);
+  }
+  return session ? (
+    <Workspace
+      key={session.accessToken}
+      session={session}
+      logout={() => set(null)}
+    />
+  ) : (
+    <Auth onSession={set} />
+  );
+}
+function Workspace({
+  session,
+  logout,
+}: {
+  session: Session;
+  logout: () => void;
+}) {
+  const api = useMemo(() => apiFor(session), [session]);
+  const [data, setData] = useState<Bootstrap | null>(null),
+    [error, setError] = useState(""),
+    [fieldId, setFieldId] = useState(""),
+    [weather, setWeather] = useState<Weather | null>(null),
+    [weatherError, setWeatherError] = useState(""),
+    [panel, setPanel] = useState<"fields" | "chat" | "detail">("chat"),
+    [detail, setDetail] = useState<
+      "overview" | "observation" | "new" | "history" | "tasks"
+    >("overview"),
+    [observationId, setObservationId] = useState(""),
+    [parent, setParent] = useState<string | undefined>(),
+    [artifact, setArtifact] = useState<AgentArtifact | null>(null),
+    [notifications, setNotifications] = useState(false),
+    [loading, setLoading] = useState(true),
+    [addingField, setAddingField] = useState(false);
+  const alive = useRef(true),
+    controllers = useRef<Set<AbortController>>(new Set());
+  const refresh = useCallback(async () => {
+    const c = new AbortController();
+    controllers.current.add(c);
+    try {
+      const result = await api.request<Bootstrap>("/api/bootstrap", {
+        signal: c.signal,
+      });
+      if (alive.current) {
+        setData(result);
+        setFieldId((id) => id || result.fields[0]?.id || "");
+        setError("");
+      }
+    } catch (e) {
+      if (
+        alive.current &&
+        !(e instanceof DOMException && e.name === "AbortError")
+      )
+        setError(errorText(e));
+    } finally {
+      controllers.current.delete(c);
+      if (alive.current) setLoading(false);
+    }
+  }, [api]);
+  useEffect(() => {
+    alive.current = true;
+    void refresh();
+    const timer = setInterval(() => void refresh(), 30000);
+    return () => {
+      alive.current = false;
+      clearInterval(timer);
+      controllers.current.forEach((c) => c.abort());
+      controllers.current.clear();
+    };
+  }, [refresh]);
+  useEffect(() => {
+    setWeather(null);
+    setWeatherError("");
+    if (!fieldId) return;
+    let valid = true;
+    const c = new AbortController();
+    controllers.current.add(c);
+    api
+      .request<Weather>("/api/fields/" + fieldId + "/weather", {
+        signal: c.signal,
+      })
+      .then((w) => {
+        if (valid) setWeather(w);
+      })
+      .catch((e) => {
+        if (valid) setWeatherError(errorText(e));
+      });
+    return () => {
+      valid = false;
+      c.abort();
+      controllers.current.delete(c);
+    };
+  }, [api, fieldId]);
+  const selectField = useCallback((id: string) => {
+    setFieldId(id);
+    setDetail("overview");
+    setArtifact(null);
+  }, []);
+  const field = data?.fields.find((f) => f.id === fieldId),
+    observation = data?.observations.find((o) => o.id === observationId),
+    tasks = data?.tasks.filter((t) => t.fieldId === fieldId) || [],
+    observations =
+      data?.observations.filter((o) => o.fieldId === fieldId) || [];
+  function newObservation(parentId?: string) {
+    setParent(parentId);
+    setDetail("new");
+    setPanel("detail");
+    setArtifact(null);
+  }
+  function openObservation(o: Observation) {
+    setObservationId(o.id);
+    setDetail("observation");
+    setPanel("detail");
+    setArtifact(null);
+  }
+  async function markRead(id: string) {
+    try {
+      await api.request("/api/notifications/" + id + "/read", {
+        method: "POST",
+        body: "{}",
+      });
+      await refresh();
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
+  function showArtifact(a: AgentArtifact) {
+    setArtifact(a);
+    setDetail("overview");
+    setPanel("detail");
+    if (a.observationId) {
+      setObservationId(a.observationId);
+      setDetail("observation");
+    }
+  }
+  return (
+    <div className="workspace">
+      {addingField && (
+        <FieldForm
+          api={api}
+          onClose={() => setAddingField(false)}
+          onSaved={(f) => {
+            setAddingField(false);
+            setFieldId(f.id);
+            void refresh();
+          }}
+        />
+      )}
+      <header className="topbar">
+        <a className="brand" href="#" aria-label="AGROMAX главная">
+          <img src="/agromax-logo.svg" alt="AGROMAX" />
+        </a>
+        <span className="topbar-divider" />
+        <div className="farm-name">
+          <span className="eyebrow">ХОЗЯЙСТВО</span>
+          <strong>{session.farm.name}</strong>
+        </div>
+        <div className="topbar-actions">
+          {session.demo && <span className="demo-pill">Деморежим</span>}
+          <button
+            className="icon-button notification-button"
+            aria-label="Уведомления"
+            aria-expanded={notifications}
+            onClick={() => setNotifications(!notifications)}
+          >
+            <Bell size={19} />
+            {data?.notifications.some((n) => !n.read) && <i />}
+          </button>
+          <span className="avatar" title={session.user.email || "Агроном"}>
+            АГ
+          </span>
+          <button
+            className="icon-button"
+            aria-label="Выйти из аккаунта"
+            onClick={logout}
+          >
+            <LogOut size={19} />
+          </button>
+        </div>
+      </header>
+      {notifications && (
+        <section className="notification-popover">
+          <div className="section-heading">
+            <h2>Уведомления</h2>
+            <button
+              className="text-button"
+              onClick={() => setNotifications(false)}
+            >
+              Закрыть
+            </button>
+          </div>
+          {!data?.notifications.length && (
+            <p className="muted">
+              Пока нет новых событий. Здесь появятся напоминания и изменения по
+              полям.
+            </p>
+          )}
+          {data?.notifications.map((n) => (
+            <article className={n.read ? "read" : ""} key={n.id}>
+              <small>
+                {date(n.createdAt)} · {n.read ? "Прочитано" : "Новое"}
+              </small>
+              <h3>{n.title}</h3>
+              <p>{n.body}</p>
+              <div className="button-row">
+                {n.fieldId && (
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      selectField(n.fieldId!);
+                      setNotifications(false);
+                    }}
+                  >
+                    Открыть поле
+                  </button>
+                )}
+                {!n.read && (
+                  <button
+                    className="text-button"
+                    onClick={() => markRead(n.id)}
+                  >
+                    Прочитано <Check size={13} />
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
+      <div className="workspace-heading">
+        <div>
+          <span className="eyebrow">ПОЛЕВОЙ КОНТРОЛЬ</span>
+          <h1>Ваши поля. Ясная картина.</h1>
+        </div>
+        <div className="today">
+          <span className="context-dot" />
+          {new Date().toLocaleDateString("ru-RU", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })}
+          <button
+            className="icon-button"
+            onClick={() => void refresh()}
+            aria-label="Обновить данные"
+          >
+            <RefreshCw size={15} />
+          </button>
+        </div>
+      </div>
+      {error && (
+        <div className="global-error" role="alert">
+          {error}
+          <button className="text-button" onClick={() => void refresh()}>
+            Повторить
+          </button>
+        </div>
+      )}
+      {loading ? (
+        <div className="loading-state" role="status">
+          <Leaf size={30} />
+          <h2>Загружаем хозяйство…</h2>
+          <p>Поля, наблюдения и история решений</p>
+        </div>
+      ) : !data ? (
+        <div className="loading-state">
+          <h2>Хозяйство недоступно</h2>
+          <p>Проверьте подключение к API и повторите загрузку.</p>
+          <button className="primary" onClick={() => void refresh()}>
+            Повторить
+          </button>
+        </div>
+      ) : !field ? (
+        <div className="loading-state">
+          <h2>В хозяйстве пока нет полей</h2>
+          <p>
+            Добавьте реальный контур, чтобы начать наблюдения и работу с
+            помощником.
+          </p>
+          {session.user.role === "chief" ? (
+            <button className="primary" onClick={() => setAddingField(true)}>
+              <Plus size={16} />
+              Добавить первое поле
+            </button>
+          ) : (
+            <p>Добавление полей доступно руководителю хозяйства.</p>
+          )}
+        </div>
+      ) : (
+        <>
+          <nav className="mobile-tabs" aria-label="Разделы рабочего места">
+            {[
+              ["fields", "Поля", Map],
+              ["chat", "Помощник", MessageSquare],
+              ["detail", "Материалы", ClipboardList],
+            ].map(([id, title, Icon]) => (
+              <button
+                key={id as string}
+                className={panel === id ? "active" : ""}
+                onClick={() => setPanel(id as typeof panel)}
+              >
+                {typeof Icon !== "string" && <Icon size={17} />}
+                {title as string}
+              </button>
+            ))}
+          </nav>
+          <main className="work-grid">
+            <aside
+              className={
+                "fields-panel mobile-" + (panel === "fields" ? "show" : "hide")
+              }
+            >
+              <div className="panel-header">
+                <div>
+                  <span className="eyebrow">КОНТУРЫ ХОЗЯЙСТВА</span>
+                  <h2>
+                    Поля <span className="count">{data.fields.length}</span>
+                  </h2>
+                </div>
+                {session.user.role === "chief" ? (
+                  <button
+                    className="icon-button"
+                    aria-label="Добавить поле"
+                    onClick={() => setAddingField(true)}
+                  >
+                    <Plus size={19} />
+                  </button>
+                ) : (
+                  <Map size={19} />
+                )}
+              </div>
+              <div className="map-wrap">
+                <FieldMap
+                  fields={data.fields}
+                  selected={fieldId}
+                  onSelect={selectField}
+                />
+                {data.demo && (
+                  <span className="map-caption">
+                    Учебные контуры · синтетические
+                  </span>
+                )}
+              </div>
+              <div className="field-list">
+                {data.fields.map((f, i) => (
+                  <button
+                    className={
+                      "field-row " + (f.id === fieldId ? "selected" : "")
+                    }
+                    key={f.id}
+                    onClick={() => selectField(f.id)}
+                  >
+                    <span className="field-number">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span>
+                      <strong>{f.name}</strong>
+                      <small>
+                        {f.crop} · {f.areaHa.toLocaleString("ru-RU")} га
+                      </small>
+                    </span>
+                    <ArrowUpRight size={17} />
+                  </button>
+                ))}
+              </div>
+              <div className="field-footer">
+                <span>Общая площадь</span>
+                <strong>
+                  {data.fields
+                    .reduce((n, f) => n + f.areaHa, 0)
+                    .toLocaleString("ru-RU")}{" "}
+                  га
+                </strong>
+              </div>
+            </aside>
+            <div
+              className={
+                "chat-column mobile-" + (panel === "chat" ? "show" : "hide")
+              }
+            >
+              <Chat
+                key={fieldId}
+                api={api}
+                field={field}
+                data={data}
+                onRefresh={() => void refresh()}
+                onArtifact={showArtifact}
+                onObservation={() => newObservation()}
+              />
+            </div>
+            <aside
+              className={
+                "context-panel mobile-" + (panel === "detail" ? "show" : "hide")
+              }
+            >
+              <div className="panel-header">
+                <div>
+                  <span className="eyebrow">КОНТЕКСТ И МАТЕРИАЛЫ</span>
+                  <h2>{field.name}</h2>
+                </div>
+                <ClipboardList size={19} />
+              </div>
+              <nav className="context-tabs" aria-label="Материалы поля">
+                <button
+                  className={detail === "overview" ? "active" : ""}
+                  onClick={() => {
+                    setDetail("overview");
+                    setArtifact(null);
+                  }}
+                >
+                  Обзор
+                </button>
+                <button
+                  className={detail === "history" ? "active" : ""}
+                  onClick={() => {
+                    setDetail("history");
+                    setArtifact(null);
+                  }}
+                >
+                  История <span>{observations.length}</span>
+                </button>
+                <button
+                  className={detail === "tasks" ? "active" : ""}
+                  onClick={() => {
+                    setDetail("tasks");
+                    setArtifact(null);
+                  }}
+                >
+                  Задачи{" "}
+                  <span>{tasks.filter((t) => t.status === "open").length}</span>
+                </button>
+              </nav>
+              <div className="context-content">
+                {detail === "new" ? (
+                  <ObservationForm
+                    key={fieldId + (parent || "")}
+                    api={api}
+                    fieldId={fieldId}
+                    parent={parent}
+                    onCancel={() => setDetail("overview")}
+                    onSaved={(o) => {
+                      void refresh();
+                      openObservation(o);
+                    }}
+                  />
+                ) : detail === "observation" && observation ? (
+                  <ObservationDetail
+                    key={observation.id + observation.version}
+                    api={api}
+                    observation={observation}
+                    onChange={() => void refresh()}
+                    onRevisit={() => newObservation(observation.id)}
+                  />
+                ) : detail === "history" ? (
+                  <>
+                    <h3>История наблюдений</h3>
+                    {observations.length === 0 ? (
+                      <p className="empty">
+                        Первое наблюдение станет началом истории поля.
+                      </p>
+                    ) : (
+                      observations
+                        .slice()
+                        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                        .map((o) => (
+                          <button
+                            key={o.id}
+                            className="observation-row"
+                            onClick={() => openObservation(o)}
+                          >
+                            <span className="eyebrow">
+                              {date(o.createdAt)} ·{" "}
+                              {o.status === "approved"
+                                ? "Подтверждено"
+                                : "Черновик"}
+                            </span>
+                            <p>{o.note}</p>
+                            <span className="text-link">Открыть запись ↗</span>
+                          </button>
+                        ))
+                    )}
+                    <button
+                      className="outline wide"
+                      onClick={() => newObservation()}
+                    >
+                      <Plus size={16} />
+                      Добавить наблюдение
+                    </button>
+                  </>
+                ) : detail === "tasks" ? (
+                  <>
+                    <h3>Работы и проверки</h3>
+                    {tasks.length === 0 && (
+                      <p className="empty">
+                        Задачи появятся после подтверждения наблюдения.
+                      </p>
+                    )}
+                    {tasks.map((t) => (
+                      <TaskCard
+                        key={t.id + t.version}
+                        api={api}
+                        task={t}
+                        onChange={() => void refresh()}
+                        onRevisit={() => newObservation(t.observationId)}
+                      />
+                    ))}
+                  </>
+                ) : artifact ? (
+                  <div className="artifact">
+                    <span className="eyebrow">МАТЕРИАЛ ПОМОЩНИКА</span>
+                    <h3>{artifact.title}</h3>
+                    <p className="prewrap">{artifact.body}</p>
+                    {artifact.proposedTask && (
+                      <p className="callout">
+                        Предлагаемая задача: {artifact.proposedTask.title} ·{" "}
+                        {date(artifact.proposedTask.dueAt)}
+                      </p>
+                    )}
+                    <p className="fine">
+                      Это предложение ИИ. Проверьте сведения и сохраните
+                      наблюдение для отдельного подтверждения.
+                    </p>
+                    <button
+                      className="primary wide"
+                      onClick={() => newObservation()}
+                    >
+                      Записать наблюдение <Plus size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="field-summary">
+                      <span className="crop-icon">
+                        <Leaf size={23} />
+                      </span>
+                      <div>
+                        <h3>{field.crop}</h3>
+                        <p>
+                          {field.areaHa} га ·{" "}
+                          {field.demo
+                            ? "Учебное поле"
+                            : field.boundary.length
+                              ? "Поле хозяйства"
+                              : "Точка · контур не задан"}
+                        </p>
+                      </div>
+                    </div>
+                    <section className="weather">
+                      <div className="section-heading">
+                        <h3>
+                          <CloudSun size={18} />
+                          Погода на поле
+                        </h3>
+                        <span className="live-tag">API</span>
+                      </div>
+                      {weather ? (
+                        <>
+                          <div className="weather-days">
+                            {weather.days.slice(0, 3).map((d) => (
+                              <div key={d.date}>
+                                <small>{date(d.date)}</small>
+                                <strong>{Math.round(d.maxC)}°</strong>
+                                <span>
+                                  {Math.round(d.minC)}° · {d.rainMm} мм
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          <small className="weather-source">
+                            {weather.source} ·{" "}
+                            {new Date(weather.fetchedAt).toLocaleTimeString(
+                              "ru-RU",
+                              { hour: "2-digit", minute: "2-digit" },
+                            )}
+                          </small>
+                        </>
+                      ) : (
+                        <p className="muted">
+                          {weatherError || "Загружаем прогноз…"}
+                        </p>
+                      )}
+                    </section>
+                    <div className="stat-row">
+                      <div>
+                        <strong>{observations.length}</strong>
+                        <span>наблюдений</span>
+                      </div>
+                      <div>
+                        <strong>
+                          {tasks.filter((t) => t.status === "open").length}
+                        </strong>
+                        <span>открытых задач</span>
+                      </div>
+                    </div>
+                    <div className="next-step">
+                      <span className="eyebrow">НАЧНИТЕ С ФАКТОВ</span>
+                      <h3>
+                        Увидели изменение?
+                        <br />
+                        Зафиксируйте его.
+                      </h3>
+                      <p>
+                        Фото, координаты и короткая заметка сохранят контекст
+                        для решения.
+                      </p>
+                      <button
+                        className="primary wide"
+                        onClick={() => newObservation()}
+                      >
+                        <Plus size={17} />
+                        Новое наблюдение
+                      </button>
+                    </div>
+                    <div className="workflow">
+                      <span>01 Наблюдение</span>
+                      <span>02 Решение</span>
+                      <span>03 Проверка</span>
+                    </div>
+                  </>
+                )}
+              </div>
+              <footer className="context-footer">
+                <span className="context-dot" />
+                Изменения сохраняются в хозяйстве
+              </footer>
+            </aside>
+          </main>
+        </>
+      )}
+    </div>
+  );
 }
