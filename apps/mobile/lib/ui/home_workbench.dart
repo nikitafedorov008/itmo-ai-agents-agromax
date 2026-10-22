@@ -543,6 +543,7 @@ extension _Workbench on _HomeState {
             'Погода поля',
             () => [
               Text('${weather['source']}'),
+              Text('Получено: ${observationDate(weather['fetchedAt'])}'),
               for (final d in weather['days'] as List)
                 Text(
                   '${d['date']}: ${d['minC']}…${d['maxC']} °C · осадки ${d['rainMm']} мм',

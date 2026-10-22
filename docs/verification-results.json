@@ -76,5 +76,53 @@
   "android": {
     "tested": false,
     "reason": "SDK not installed"
+  },
+  "workbench": {
+    "testedAt": "2026-10-23",
+    "providers": [
+      {
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "passed": true,
+        "twoTurnsElapsedMs": 16492,
+        "tools": [
+          "field_history",
+          "source_search",
+          "weather"
+        ],
+        "sameConversation": true,
+        "draftRemainsUnapproved": true,
+        "noTasksCreatedByChat": true
+      },
+      {
+        "provider": "mimo",
+        "model": "mimo-v2.6-flash",
+        "passed": true,
+        "twoTurnsElapsedMs": 78377,
+        "tools": [
+          "field_history",
+          "source_search",
+          "weather"
+        ],
+        "sameConversation": true,
+        "draftRemainsUnapproved": true,
+        "noTasksCreatedByChat": true
+      }
+    ],
+    "nativeIOS": {
+      "realModelQuestionAndOption": true,
+      "provider": "deepseek",
+      "sameConversation": true,
+      "draftPreserved": true,
+      "noSilentApproval": true
+    },
+    "webIAB": {
+      "satelliteSchemaToggle": true,
+      "weatherAndSources": true,
+      "questionOptionContinuation": true,
+      "explicitApprovalCreatesTask": true,
+      "linkedRevisit": true,
+      "consoleErrors": []
+    }
   }
 }

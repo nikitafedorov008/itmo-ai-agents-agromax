@@ -20,7 +20,8 @@
     "dev": "node tools/dev.mjs",
     "setup:local": "supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime && node tools/configure-local.mjs",
     "check:integration": "node tools/smoke.mjs && node tools/check-security.mjs",
-    "check:models": "node tools/check-models.mjs"
+    "check:models": "node tools/check-models.mjs",
+    "check:workbench": "node tools/check-workbench.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
