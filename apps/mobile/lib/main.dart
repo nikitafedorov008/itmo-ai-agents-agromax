@@ -377,12 +377,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
 
   List<Widget> chatView() {
     chatRetry ??= model.pendingChat;
-    final history = items(
-      'conversations',
-    ).where((c) => c['fieldId'] == fieldId).toList();
-    final messages = chat.isEmpty
-        ? (history.isEmpty ? <dynamic>[] : history.last['messages'] as List)
-        : chat;
+    final messages = contextMessages;
     return [
       heading('Агрономический агент'),
       NativeButton.icon(
@@ -440,7 +435,10 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
   List<Widget> replyWidgets(Map reply) => [
     Text('Модель: ${reply['model']} · ${reply['provider']}'),
     SourceDisclosure(sources: reply['sources'] ?? []),
-    if (reply['artifact']?['question'] != null)
+    if (reply['artifact'] != null)
+      ...artifactActions(reply['artifact'], reply['sources'] ?? []),
+    if (reply['artifact']?['question'] != null &&
+        reply['id'] == latestReply?['id'])
       ...questionWidgets(reply['artifact']['question']),
     if (reply['artifact'] != null)
       card(
@@ -484,8 +482,13 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       'message': message.text,
       'provider': provider,
       if (observationId != null) 'observationId': observationId,
-      if (conversationId != null || history.isNotEmpty)
-        'conversationId': conversationId ?? history.last['id'],
+      if (conversationId != null ||
+          model.conversationContexts[observationId ?? 'field'] != null ||
+          (observationId == null && history.isNotEmpty))
+        'conversationId':
+            conversationId ??
+            model.conversationContexts[observationId ?? 'field'] ??
+            history.last['id'],
     };
     final retryKey = 'chat-pending:${model.account}:$fieldId';
     try {
@@ -504,6 +507,12 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       await model.store.set(retryKey, null);
       model.pendingChat = null;
       conversationId = result['conversation']['id'];
+      model.conversationContexts[chatRetry?['observationId'] ?? 'field'] =
+          conversationId!;
+      await model.store.set(
+        'chat-contexts:${model.account}:$fieldId',
+        model.conversationContexts,
+      );
       chat.clear();
       chat.addAll(
         List<Map<String, dynamic>>.from(result['conversation']['messages']),

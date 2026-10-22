@@ -55,4 +55,6 @@ On iOS the app uses Cupertino navigation/tab bars, inputs, buttons, alerts, acti
 
 `flutter_map` 8.3.2 renders real field boundaries, centers and observation locations. The satellite option requests attributed Esri World Imagery; the scheme option uses attributed OpenStreetMap tiles. Satellite tile failures fall back to OSM. A tile failure state states that a connection is required, while real saved contours and points remain. Point-only fields are explicitly labelled. Tiles require network; they are not an offline imagery cache.
 
-Static verification: `flutter analyze` and all twelve existing queue/chat retry tests passed during implementation. Native simulator execution is coordinated separately; this paragraph does not claim a simulator run of the new design.
+Static verification: `flutter analyze` and all fourteen tests passed during implementation (twelve existing queue/chat retry tests plus verified-evidence and native-input reset regressions). Native simulator execution is coordinated separately; this paragraph does not claim a simulator run of the new design.
+
+Observation-specific conversation ids are stored locally per account/field/observation so model clarification answers continue the same context across restarts. Returned contextual actions open real field history, weather API, sources, repeat inspection and discussion flows. Map observation markers open a native detail sheet with actual note, coordinates, date and authenticated photos.

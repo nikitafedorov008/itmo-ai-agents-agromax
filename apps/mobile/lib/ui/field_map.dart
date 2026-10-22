@@ -16,11 +16,13 @@ class FieldMap extends StatefulWidget {
     required this.observations,
     this.expanded = false,
     this.onExpand,
+    this.onObservationTap,
   });
   final Map field;
   final List<dynamic> observations;
   final bool expanded;
   final VoidCallback? onExpand;
+  final ValueChanged<Map>? onObservationTap;
   @override
   State<FieldMap> createState() => _FieldMapState();
 }
@@ -31,6 +33,7 @@ class _FieldMapState extends State<FieldMap> {
   bool satelliteUnavailable = false;
   @override
   Widget build(BuildContext context) {
+    final requestedSatellite = satellite;
     final center = mapPoint(widget.field['center']);
     if (center == null) {
       return const Padding(
@@ -69,7 +72,7 @@ class _FieldMapState extends State<FieldMap> {
                   errorTileCallback: (_, _, _) {
                     if ((!failed || satellite) && mounted) {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) {
+                        if (mounted && satellite == requestedSatellite) {
                           setState(() {
                             if (satellite) {
                               satellite = false;
@@ -117,10 +120,15 @@ class _FieldMapState extends State<FieldMap> {
                       if (mapPoint(o['location']) != null)
                         Marker(
                           point: mapPoint(o['location'])!,
-                          child: const Icon(
-                            CupertinoIcons.location_solid,
-                            color: forest,
-                            size: 32,
+                          child: GestureDetector(
+                            onTap: widget.onObservationTap == null
+                                ? null
+                                : () => widget.onObservationTap!(o),
+                            child: const Icon(
+                              CupertinoIcons.location_solid,
+                              color: forest,
+                              size: 32,
+                            ),
                           ),
                         ),
                   ],
