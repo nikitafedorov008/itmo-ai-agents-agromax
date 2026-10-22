@@ -223,16 +223,20 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
           ),
           IconButton(
             tooltip: 'Выйти',
-            onPressed: () async {
-              if (await confirm(
-                'Выйти?',
-                'Черновики и очередь останутся в аккаунте на этом устройстве.',
-              )) {
-                chat.clear();
-                conversationId = null;
-                await model.logout();
-              }
-            },
+            onPressed: chatBusy
+                ? null
+                : () async {
+                    if (await confirm(
+                      'Выйти?',
+                      'Черновики и очередь останутся в аккаунте на этом устройстве.',
+                    )) {
+                      chat.clear();
+                      conversationId = null;
+                      chatRetry = null;
+                      fieldId = null;
+                      await model.logout();
+                    }
+                  },
             icon: const Icon(Icons.logout),
           ),
         ],
@@ -583,7 +587,9 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
     const Text('Черновик сохраняется на устройстве по мере ввода.'),
     const SizedBox(height: 16),
     TextFormField(
-      key: ValueKey('note:${model.draft['parentObservationId']}'),
+      key: ValueKey(
+        'note:${model.account}:$fieldId:${model.draft['parentObservationId']}',
+      ),
       initialValue: model.draft['note'],
       maxLines: 4,
       decoration: const InputDecoration(labelText: 'Что вы заметили?'),
@@ -591,6 +597,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
     ),
     const SizedBox(height: 12),
     TextFormField(
+      key: ValueKey('extent:${model.account}:$fieldId'),
       initialValue: model.draft['extent'],
       decoration: const InputDecoration(labelText: 'Масштаб / участок'),
       onChanged: (v) => model.editDraft('extent', v),
