@@ -1,1 +1,27 @@
-{"name":"itmo-ai-agents-agromax","version":"0.1.0","private":true,"type":"module","workspaces":["apps/api","apps/web","packages/contracts"],"scripts":{"dev:api":"npm run dev -w @agromax/api","dev:web":"npm run dev -w @agromax/web","build":"npm run build --workspaces --if-present","test":"npm run test --workspaces --if-present","typecheck":"npm run typecheck --workspaces --if-present"}}
+{
+  "name": "itmo-ai-agents-agromax",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "packages/contracts"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @agromax/api",
+    "dev:web": "npm run dev -w @agromax/web",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "contracts:generate": "node tools/generate-contracts.mjs",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "supabase": "^2.121.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
