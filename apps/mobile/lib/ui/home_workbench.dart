@@ -46,9 +46,67 @@ extension _Workbench on _HomeState {
           ?.toString() ??
       '';
 
-  Map? get latestReply => contextMessages.reversed
-      .where((m) => m['reply'] != null)
-      .firstOrNull?['reply'];
+  Map? get latestReply {
+    final raw = contextMessages.reversed
+        .where((m) => m['reply'] != null)
+        .firstOrNull?['reply'];
+    return raw == null
+        ? null
+        : currentReply(
+            raw,
+            items('observations'),
+            contextObservationId: observationId,
+          );
+  }
+
+  List<Widget> replyDecisionWidgets(Map reply) => [
+    if (reply['_artifactNotice'] != null)
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Text(
+          reply['_artifactNotice'],
+          style: const TextStyle(fontSize: 14, color: forest),
+        ),
+      ),
+    if (reply['_canReview'] == true)
+      NativeButton(
+        filled: true,
+        onPressed: () => reviewCurrentArtifact(reply),
+        child: const Text('Проверить и утвердить'),
+      ),
+    if (reply['_canRevisit'] == true)
+      NativeButton.icon(
+        onPressed: () => startRevisit(reply['_observationId']),
+        icon: const Icon(CupertinoIcons.arrow_clockwise),
+        label: const Text('Повторный осмотр'),
+      ),
+  ];
+  Future<void> startRevisit(String? id) async {
+    if (id == null) return;
+    await model.editDraft('parentObservationId', id);
+    await model.editDraft('note', 'Повторный осмотр: ');
+    if (mounted) updateUI(() => tab = 1);
+  }
+
+  Future<void> reviewCurrentArtifact(Map reply) async {
+    // Recheck at the tap boundary as sync may have replaced the observation.
+    final current = currentReply(
+      reply,
+      items('observations'),
+      contextObservationId: observationId,
+    );
+    if (current['_canReview'] != true) {
+      model.changed();
+      return;
+    }
+    final artifact = current['artifact'];
+    await approve({
+      'id': artifact['observationId'],
+      'version': artifact['observationVersion'],
+      'body': artifact['body'],
+    }, artifact['proposedTask']);
+  }
+
   Future<void> choose(
     String title,
     Map<String, String> options,
@@ -339,28 +397,7 @@ extension _Workbench on _HomeState {
       if (reply != null) SourceDisclosure(sources: reply['sources'] ?? []),
       if (artifact != null)
         ...artifactActions(artifact, reply?['sources'] ?? []),
-      if (artifact != null &&
-          artifact['observationId'] != null &&
-          artifact['observationVersion'] != null)
-        card(
-          artifact['title'],
-          artifact['body'],
-          actions: [
-            if (artifact['proposedTask'] != null)
-              Text(
-                'Предлагаемая задача: ${artifact['proposedTask']['title']}\nСрок: ${artifact['proposedTask']['dueAt']}',
-              ),
-            NativeButton(
-              filled: true,
-              onPressed: () => approve({
-                'id': artifact['observationId'],
-                'version': artifact['observationVersion'],
-                'body': artifact['body'],
-              }, artifact['proposedTask']),
-              child: const Text('Проверить и утвердить'),
-            ),
-          ],
-        ),
+      if (reply != null) ...replyDecisionWidgets(reply),
       const SizedBox(height: 12),
       NativeButton(
         filled: true,

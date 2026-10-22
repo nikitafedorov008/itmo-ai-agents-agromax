@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'ui/adaptive.dart';
 import 'ui/field_map.dart';
 import 'ui/workbench.dart';
+import 'ui/reply_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -433,41 +434,34 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
     ];
   }
 
-  List<Widget> replyWidgets(Map reply) => [
-    Text('Модель: ${reply['model']} · ${reply['provider']}'),
-    SourceDisclosure(sources: reply['sources'] ?? []),
-    if (reply['artifact'] != null)
-      ...artifactActions(reply['artifact'], reply['sources'] ?? []),
-    if (reply['artifact']?['question'] != null &&
-        reply['id'] == latestReply?['id'])
-      ...questionWidgets(reply['artifact']['question']),
-    if (reply['artifact'] != null)
-      card(
-        reply['artifact']['title'],
-        reply['artifact']['body'],
-        actions: [
-          if (reply['artifact']['kind'] == 'observation' &&
-              reply['artifact']['observationId'] == null)
-            NativeButton(
-              onPressed: () => act(() async {
-                await model.editDraft('note', reply['artifact']['body']);
-                setState(() => tab = 1);
-              }),
-              child: const Text('Открыть как черновик наблюдения'),
-            ),
-          if (reply['artifact']['observationId'] != null &&
-              reply['artifact']['observationVersion'] != null)
-            NativeButton(
-              onPressed: () => approve({
-                'id': reply['artifact']['observationId'],
-                'version': reply['artifact']['observationVersion'],
-                'body': reply['artifact']['body'],
-              }, reply['artifact']['proposedTask']),
-              child: const Text('Проверить и утвердить'),
-            ),
-        ],
-      ),
-  ];
+  List<Widget> replyWidgets(Map rawReply) {
+    final reply = currentReply(
+      rawReply,
+      items('observations'),
+      contextObservationId: observationId,
+    );
+    return [
+      Text('Модель: ${reply['model']} · ${reply['provider']}'),
+      SourceDisclosure(sources: reply['sources'] ?? []),
+      ...replyDecisionWidgets(reply),
+      if (reply['artifact'] != null)
+        ...artifactActions(reply['artifact'], reply['sources'] ?? []),
+      if (reply['artifact']?['question'] != null &&
+          reply['id'] == latestReply?['id'])
+        ...questionWidgets(reply['artifact']['question']),
+      if (reply['artifact']?['kind'] == 'observation' &&
+          reply['artifact']['observationId'] == null &&
+          reply['_artifactNotice'] == null)
+        NativeButton(
+          onPressed: () => act(() async {
+            await model.editDraft('note', reply['artifact']['body']);
+            setState(() => tab = 1);
+          }),
+          child: const Text('Открыть как черновик наблюдения'),
+        ),
+    ];
+  }
+
   Future<void> sendChat() => act(() async {
     if (chatRetry == null && message.text.trim().isEmpty) {
       return;
