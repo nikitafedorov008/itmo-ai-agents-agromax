@@ -455,7 +455,7 @@ textarea::placeholder {
   gap: 18px;
   padding: 0 30px 30px;
   height: calc(100dvh - 180px);
-  min-height: 630px;
+  min-height: 480px;
 }
 .fields-panel,
 .chat-panel,
@@ -1258,7 +1258,7 @@ textarea::placeholder {
   .work-grid {
     display: block;
     height: calc(100dvh - 210px);
-    min-height: 530px;
+    min-height: 480px;
     padding: 0 14px 14px;
   }
   .mobile-hide {

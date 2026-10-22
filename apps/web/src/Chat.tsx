@@ -40,7 +40,7 @@ export function Chat({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [terminalKey, setTerminalKey] = useState<string | null>(null);
-  const bottom = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
   const abort = useRef<AbortController | null>(null);
   const active = useRef(true);
   useEffect(() => {
@@ -52,7 +52,9 @@ export function Chat({
   }, []);
   const conversation = conversations.find((c) => c.id === conversationId);
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (!conversation?.messages.length && !busy) return;
+    const list = messagesRef.current;
+    list?.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
   }, [conversation?.messages.length, busy]);
   const payload = {
     fieldId: field.id,
@@ -163,7 +165,7 @@ export function Chat({
           ))}
         </select>
       )}
-      <div className="messages" aria-live="polite">
+      <div ref={messagesRef} className="messages" aria-live="polite">
         {!conversation?.messages.length && (
           <div className="chat-empty">
             <div className="spark-icon">
@@ -238,7 +240,6 @@ export function Chat({
             Помощник изучает контекст поля<span>…</span>
           </p>
         )}
-        <div ref={bottom} />
       </div>
       <div className="composer">
         <button className="text-button" onClick={onObservation}>
