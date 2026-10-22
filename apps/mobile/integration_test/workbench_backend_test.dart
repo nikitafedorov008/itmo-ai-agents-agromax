@@ -30,7 +30,7 @@ void main() {
       final field = await api.request(ApiRoutes.createField, {
         'operationId': uuid.v4(),
         'confirmed': true,
-        'name': 'Осмотр пшеницы $suffix',
+        'name': 'Поле 1 · учебный пример',
         'crop': 'Озимая пшеница',
         'areaHa': 12.5,
         'center': {'lat': 55.75, 'lng': 37.61},

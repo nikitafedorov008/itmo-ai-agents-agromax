@@ -96,6 +96,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
   String? conversationId;
   Timer? timer;
   bool chatBusy = false;
+  bool chatPreparing = false;
   Map<String, dynamic>? chatRetry;
   final List<Map<String, dynamic>> chat = [];
   void updateUI(VoidCallback action) => setState(action);
@@ -463,6 +464,34 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
   }
 
   Future<void> sendChat() => act(() async {
+    if (chatBusy || chatPreparing) return;
+    chatPreparing = true;
+    final requestField = fieldId;
+    final requestObservation = observationId;
+    final requestAccount = model.account;
+    final retryKey = 'chat-pending:${model.account}:$fieldId';
+    try {
+      final saved = await model.store.get(retryKey);
+      if (fieldId != requestField ||
+          observationId != requestObservation ||
+          model.account != requestAccount) {
+        return;
+      }
+      final pending = saved == null
+          ? (chatRetry ?? model.pendingChat)
+          : Map<String, dynamic>.from(saved);
+      if (!ChatAttempt.matchesContext(
+        pending,
+        fieldId: fieldId,
+        observationId: observationId,
+      )) {
+        if (mounted) await showPendingContext(pending!);
+        return;
+      }
+      chatRetry = pending == null ? null : Map<String, dynamic>.from(pending);
+    } finally {
+      chatPreparing = false;
+    }
     if (chatRetry == null && message.text.trim().isEmpty) {
       return;
     }
@@ -485,14 +514,11 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
             model.conversationContexts[observationId ?? 'field'] ??
             history.last['id'],
     };
-    final retryKey = 'chat-pending:${model.account}:$fieldId';
     try {
-      final saved = await model.store.get(retryKey);
-      if (saved != null) {
-        chatRetry = Map<String, dynamic>.from(saved);
-      }
-      chatRetry = ChatAttempt.prepare(
+      chatRetry = ChatAttempt.prepareForContext(
         chatRetry!,
+        fieldId: fieldId,
+        observationId: observationId,
         newId: uuid.v4,
         provider: provider,
       );

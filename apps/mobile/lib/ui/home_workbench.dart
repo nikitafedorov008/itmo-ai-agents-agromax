@@ -1,7 +1,34 @@
 part of '../main.dart';
 
 extension _Workbench on _HomeState {
-  void bindObservation(String? id) {
+  bool bindObservation(String? id) {
+    if (observationId != id && (chatBusy || chatPreparing)) {
+      unawaited(
+        adaptiveDialog<void>(
+          context: context,
+          builder: (c) => NativeAlert(
+            title: const Text('Запрос выполняется'),
+            content: const Text('Дождитесь ответа перед сменой наблюдения.'),
+            actions: [
+              NativeButton(
+                onPressed: () => Navigator.pop(c),
+                child: const Text('Понятно'),
+              ),
+            ],
+          ),
+        ),
+      );
+      return false;
+    }
+    final pending = chatRetry ?? model.pendingChat;
+    if (!ChatAttempt.matchesContext(
+      pending,
+      fieldId: fieldId,
+      observationId: id,
+    )) {
+      unawaited(showPendingContext(pending!));
+      return false;
+    }
     if (observationId != id) {
       observationId = id;
       model.activeObservation = id;
@@ -14,7 +41,31 @@ extension _Workbench on _HomeState {
       conversationId = null;
       chat.clear();
     }
+    return true;
   }
+
+  Future<void> showPendingContext(Map pending) => adaptiveDialog<void>(
+    context: context,
+    builder: (c) => NativeAlert(
+      title: const Text('Есть незавершённый запрос'),
+      content: const Text(
+        'Он относится к другому наблюдению. Вернитесь к его обсуждению, чтобы явно повторить или отменить запрос. Новый запрос сейчас не отправлен.',
+      ),
+      actions: [
+        NativeButton(
+          onPressed: () => Navigator.pop(c),
+          child: const Text('Закрыть'),
+        ),
+        NativeButton(
+          onPressed: () {
+            Navigator.pop(c);
+            if (bindObservation(pending['observationId'])) openConversation();
+          },
+          child: const Text('К обсуждению запроса'),
+        ),
+      ],
+    ),
+  );
 
   Map? get selectedField =>
       items('fields').where((f) => f['id'] == fieldId).firstOrNull;
@@ -303,8 +354,7 @@ extension _Workbench on _HomeState {
       NativeButton(
         filled: true,
         onPressed: () {
-          bindObservation(o['id']);
-          openConversation();
+          if (bindObservation(o['id'])) openConversation();
         },
         child: const Text('Обсудить наблюдение'),
       ),
@@ -401,7 +451,7 @@ extension _Workbench on _HomeState {
         onPressed: chatBusy || fieldId == null
             ? null
             : () {
-                bindObservation(o?['id']);
+                if (!bindObservation(o?['id'])) return;
                 message.text = o == null
                     ? 'Помоги провести осмотр поля. Какие признаки нужно описать?'
                     : 'Проанализируй выбранное наблюдение: ${o['note']}. Сопоставь с историей поля, погодой и проверенными источниками. Уточни недостающие сведения.';
@@ -417,8 +467,7 @@ extension _Workbench on _HomeState {
       ),
       NativeButton.icon(
         onPressed: () {
-          bindObservation(o?['id']);
-          openConversation();
+          if (bindObservation(o?['id'])) openConversation();
         },
         icon: const Icon(CupertinoIcons.chat_bubble_2, color: forest),
         label: const Text('Обсудить свободно'),
