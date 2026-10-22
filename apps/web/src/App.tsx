@@ -420,6 +420,11 @@ function Workspace({
                 field={field}
                 data={data}
                 onRefresh={() => void refresh()}
+                observation={
+                  detail === "observation" && observation?.fieldId === fieldId
+                    ? observation
+                    : undefined
+                }
                 onArtifact={showArtifact}
                 onObservation={() => newObservation()}
               />
@@ -481,9 +486,19 @@ function Workspace({
                   />
                 ) : detail === "observation" && observation ? (
                   <ObservationDetail
-                    key={observation.id + observation.version}
+                    key={
+                      observation.id +
+                      observation.version +
+                      JSON.stringify(artifact?.proposedTask || null)
+                    }
                     api={api}
                     observation={observation}
+                    proposal={
+                      artifact?.observationId === observation.id &&
+                      artifact.observationVersion === observation.version
+                        ? artifact
+                        : undefined
+                    }
                     onChange={() => void refresh()}
                     onRevisit={() => newObservation(observation.id)}
                   />

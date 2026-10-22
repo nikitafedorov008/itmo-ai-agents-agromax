@@ -3,6 +3,7 @@ import { Camera, MapPin, Check, ArrowUpRight } from "lucide-react";
 import {
   ApiClient,
   type Observation,
+  type AgentArtifact,
   type ObservationInput,
   type Point,
   type Photo,
@@ -202,20 +203,30 @@ export function ObservationForm({
 }
 export function ObservationDetail({
   observation: o,
+  proposal,
   api,
   onChange,
   onRevisit,
 }: {
   observation: Observation;
+  proposal?: AgentArtifact;
   api: ApiClient;
   onChange: () => void;
   onRevisit: () => void;
 }) {
   const [createTask, setCreateTask] = useState(true),
-    [title, setTitle] = useState("Повторно осмотреть участок"),
-    [due, setDue] = useState(() =>
-      new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+    [title, setTitle] = useState(
+      proposal?.proposedTask?.title || "Повторно осмотреть участок",
     ),
+    [due, setDue] = useState(() => {
+      const date = proposal?.proposedTask
+        ? new Date(proposal.proposedTask.dueAt)
+        : new Date(Date.now() + 3 * 86400000);
+      if (!proposal?.proposedTask) date.setHours(9, 0, 0, 0);
+      return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
+    }),
     [confirmed, setConfirmed] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -228,7 +239,7 @@ export function ObservationDetail({
       version: o.version,
       confirmed: true,
       task: createTask
-        ? { title, dueAt: new Date(due + "T09:00:00").toISOString() }
+        ? { title, dueAt: new Date(due).toISOString() }
         : undefined,
     };
     const key = "approve:" + o.id + JSON.stringify(payload);
@@ -256,6 +267,19 @@ export function ObservationDetail({
         <small>{date(o.createdAt)}</small>
       </div>
       <h3>Наблюдение с поля</h3>
+      {proposal && (
+        <div className="callout">
+          <strong>{proposal.title}</strong>
+          <p className="prewrap">{proposal.body}</p>
+          {proposal.proposedTask && (
+            <small>
+              {o.status === "draft"
+                ? "Предложение задачи перенесено в форму ниже. Проверьте название и срок перед подтверждением."
+                : "Запись уже подтверждена. Для новой задачи создайте повторный осмотр и подтвердите его отдельно."}
+            </small>
+          )}
+        </div>
+      )}
       <p className="prewrap">{o.note}</p>
       {o.extent && <p className="muted">Масштаб: {o.extent}</p>}
       {o.parentObservationId && (
@@ -300,7 +324,7 @@ export function ObservationDetail({
               <label>
                 Срок
                 <input
-                  type="date"
+                  type="datetime-local"
                   required
                   value={due}
                   onChange={(e) => setDue(e.target.value)}

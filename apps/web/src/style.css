@@ -1429,3 +1429,18 @@ textarea::placeholder {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
+
+.selected-observation {
+  font-size: 10px;
+  color: #687d50;
+  background: #f1f6e8;
+  border-bottom: 1px solid var(--line);
+  padding: 9px 20px;
+  margin: 0;
+}
+.error > p:last-child {
+  margin-bottom: 0;
+}
+.error .outline {
+  font-size: 11px;
+}
