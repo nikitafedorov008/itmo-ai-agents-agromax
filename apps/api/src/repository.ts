@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Bootstrap, Conversation, Field, Notification, Observation, Photo, Session, Source, Task } from '@agromax/contracts';
 import type { Config } from './config.js';
+import { PhotoIdCollision,uploadImmutablePhoto } from './photos.js';
 import { ApiFailure, unwrap } from './domain.js';
 export type FarmContext={farm:{id:string;name:string};demo:boolean;role:'chief'|'agronomist'};
 export interface Repository {
@@ -25,7 +26,17 @@ export class SupabaseRepository implements Repository {
  async sources(query:string){const rows=check(await this.db.from('sources').select('*'));const terms=query.toLowerCase().split(/\s+/).filter(s=>s.length>2);return (rows||[]).map(r=>({r,score:terms.filter(t=>(r.title+' '+r.excerpt).toLowerCase().includes(t)).length})).sort((a,b)=>b.score-a.score).slice(0,3).map(v=>v.r as Source);}
  async apply(id:string,type:string,payload:unknown){return unwrap(check(await this.db.rpc('apply_operation',{p_operation_id:id,p_type:type,p_payload:payload})));}
  async photo(id:string){const row=check(await this.db.from('photos').select('path,data').eq('id',id).maybeSingle());if(!row)throw new ApiFailure(404,'NOT_FOUND','Фото не найдено');return row as {path:string;data:Photo};}
- async upload(id:string,file:File){const ctx=await this.context();const path=`${ctx.farm.id}/${id}`;check(await this.db.storage.from('field-photos').upload(path,file,{contentType:file.type,upsert:false}));try{return check(await this.db.rpc('register_photo',{p_id:id,p_name:file.name,p_mime:file.type})) as Photo;}catch(e){await this.db.storage.from('field-photos').remove([path]);throw e;}}
+ async upload(id:string,file:File){
+  const ctx=await this.context();const bucket=this.db.storage.from('field-photos');
+  return uploadImmutablePhoto({
+   get:async photoId=>{const row=check(await this.db.from('photos').select('data').eq('id',photoId).maybeSingle());return row?.data as Photo|undefined;},
+   put:async(path,body,metadata)=>{const {error}=await bucket.upload(path,body,{contentType:body.type,metadata,upsert:false});if(error&&String((error as any).statusCode)!=='409'&&(error as any).error!=='Duplicate'&&(error as any).code!=='Duplicate')check({data:null,error});},
+   info:async path=>{const metadata=check(await bucket.info(path));if(!metadata)throw new ApiFailure(503,'STORAGE_UNAVAILABLE','Не удалось проверить фото');return {originalName:metadata.metadata?.originalName,mimeType:metadata.contentType};},
+   download:path=>this.download(path),
+   register:async(photoId,body)=>{const result=await this.db.rpc('register_photo',{p_id:photoId,p_name:body.name,p_mime:body.type});if(result.error?.code==='23505')throw new PhotoIdCollision();return check(result) as Photo;},
+   remove:async path=>{check(await bucket.remove([path]));}
+  },ctx.farm.id,id,file);
+ }
  async download(path:string){const blob=check(await this.db.storage.from('field-photos').download(path));if(!blob)throw new ApiFailure(404,'NOT_FOUND','Фото не найдено');return blob;}
  async readNotification(id:string){const result=check(await this.db.rpc('read_notification',{p_id:id}));if(!result)throw new ApiFailure(404,'NOT_FOUND','Уведомление не найдено');return result as Notification;}
  async beginAgent(id:string,fingerprint:unknown){return unwrap<any>(check(await this.db.rpc('begin_agent',{p_operation_id:id,p_fingerprint:fingerprint})));}
