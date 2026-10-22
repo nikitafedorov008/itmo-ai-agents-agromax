@@ -7,6 +7,8 @@ create table public.tasks(id uuid primary key, farm_id uuid not null references 
 create table public.photos(id uuid primary key, farm_id uuid not null references public.farms on delete cascade, path text not null unique, data jsonb not null);
 create table public.conversations(id uuid primary key, farm_id uuid not null references public.farms on delete cascade, data jsonb not null);
 create table public.notifications(id uuid primary key default gen_random_uuid(), farm_id uuid not null references public.farms on delete cascade, dedupe_key text not null, data jsonb not null, unique(farm_id,dedupe_key));
+create function public.notification_identity() returns trigger language plpgsql set search_path=public as $$begin new.data:=new.data||jsonb_build_object('id',new.id);return new;end $$;
+create trigger notification_identity before insert on public.notifications for each row execute function public.notification_identity();
 create table public.operations(farm_id uuid not null references public.farms on delete cascade, id uuid not null, fingerprint jsonb not null, result jsonb not null, primary key(farm_id,id));
 create table public.agent_runs(id uuid primary key default gen_random_uuid(), farm_id uuid not null references public.farms on delete cascade, operation_id uuid not null, fingerprint jsonb not null, status text not null check(status in ('running','completed','failed')), result jsonb, error_code text, created_at timestamptz not null default now(), unique(farm_id,operation_id));
 create index agent_runs_farm_created on public.agent_runs(farm_id,created_at);
@@ -171,7 +173,7 @@ if r.status='completed' then return jsonb_build_object('cached',r.result); end i
 return jsonb_build_object('error',case r.status when 'failed' then 'Предыдущая попытка завершилась ошибкой. Повторите новым запросом.' else 'Запрос уже выполняется' end,'code',case r.status when 'failed' then coalesce(r.error_code,'AGENT_FAILED') else 'IN_PROGRESS' end,'status',409);
 end if;
 select demo into is_demo from farms where id=f;
-if (select count(*) from agent_runs where farm_id=f and created_at>now()-interval '1 hour')>=case when is_demo then 12 else 120 end then return jsonb_build_object('error','Лимит запросов в час','code','RATE_LIMIT','status',429); end if;
+if (select count(*) from agent_runs where farm_id=f and created_at>now()-interval '1 hour')>=(case when is_demo then 12 else 120 end) then return jsonb_build_object('error','Лимит запросов в час','code','RATE_LIMIT','status',429); end if;
 insert into agent_runs(farm_id,operation_id,fingerprint,status) values(f,p_operation_id,p_fingerprint,'running');
 return jsonb_build_object('started',true);
 end $$;
