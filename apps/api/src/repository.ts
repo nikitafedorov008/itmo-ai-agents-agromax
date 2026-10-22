@@ -16,7 +16,7 @@ export function client(cfg:Config,token?:string,key=cfg.anonKey){if(!key)throw n
 export class SupabaseRepository implements Repository {
  constructor(public db:SupabaseClient){}
  async context(){const membership=check(await this.db.from('members').select('role,farm_id').single());if(!membership)throw new ApiFailure(401,'UNAUTHORIZED','Войдите в систему');const f=check(await this.db.from('farms').select('id,name,demo').eq('id',membership.farm_id).single());if(!f)throw new ApiFailure(401,'UNAUTHORIZED','Хозяйство не найдено');return {farm:{id:f.id,name:f.name},demo:f.demo,role:membership.role} as FarmContext;}
- async all<T>(table:string):Promise<T[]> {const rows=check(await this.db.from(table).select('data'));return (rows||[]).map(r=>r.data as T);}
+ async all<T>(table:string):Promise<T[]> {const result:T[]=[];for(let offset=0;;offset+=500){const rows=check(await this.db.from(table).select('data').order('id').range(offset,offset+499))||[];result.push(...rows.map(r=>r.data as T));if(rows.length<500)break;}return result;}
  async entity<T>(table:string,id:string):Promise<T>{const row=check(await this.db.from(table).select('data').eq('id',id).maybeSingle());if(!row)throw new ApiFailure(404,'NOT_FOUND','Запись не найдена');return row.data as T;}
  field(id:string){return this.entity<Field>('fields',id)}
  observation(id:string){return this.entity<Observation>('observations',id)}
