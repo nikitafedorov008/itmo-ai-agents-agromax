@@ -46,7 +46,7 @@ export async function runAgent(repo:Repository,cfg:Config,input:z.infer<typeof c
     let result:unknown;
     if(call.function.name==='source_search'){const sources=await repo.sources((valid.data as {query:string}).query);sources.forEach(s=>usedSources.set(s.id,s));result=sources;}
     else if(call.function.name==='weather'){result=await weather(field,fetcher);}
-    else {const data=await repo.bootstrap();result=call.function.name==='field_history'?data.observations.filter(o=>o.fieldId===field.id):data.tasks.filter(t=>t.fieldId===field.id);}
+    else {const data=await repo.bootstrap();result=call.function.name==='field_history'?data.observations.filter(o=>o.fieldId===field.id):data.tasks.filter(t=>t.fieldId===field.id&&t.status==='open');}
     if(controller.signal.aborted)throw new ApiFailure(504,'AGENT_TIMEOUT','Время работы агента истекло');
     usedTools.push(call.function.name);messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify(result)});
    }
