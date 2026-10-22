@@ -48,7 +48,7 @@ class _FieldMapState extends State<FieldMap> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(22),
       child: SizedBox(
-        height: widget.expanded ? null : 200,
+        height: widget.expanded ? null : 140,
         child: Stack(
           children: [
             FlutterMap(

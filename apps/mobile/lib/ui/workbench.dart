@@ -10,7 +10,7 @@ class WorkbenchStages extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = ['signs', 'context', 'decision'].indexOf(stage);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 18),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
           for (var i = 0; i < 3; i++)
@@ -77,8 +77,17 @@ class WorkbenchStages extends StatelessWidget {
 }
 
 class ObservationPhoto extends StatelessWidget {
-  const ObservationPhoto({super.key, this.localPath, this.url, this.headers});
+  const ObservationPhoto({
+    super.key,
+    this.localPath,
+    this.url,
+    this.headers,
+    this.height = 190,
+    this.showCaption = true,
+  });
   final String? localPath, url;
+  final double height;
+  final bool showCaption;
   final Map<String, String>? headers;
   @override
   Widget build(BuildContext context) => Column(
@@ -87,7 +96,7 @@ class ObservationPhoto extends StatelessWidget {
       ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: SizedBox(
-          height: 190,
+          height: height,
           width: double.infinity,
           child: localPath != null
               ? Image.file(File(localPath!), fit: BoxFit.cover)
@@ -113,13 +122,130 @@ class ObservationPhoto extends StatelessWidget {
                 ),
         ),
       ),
+      if (showCaption) const SizedBox(height: 6),
+      if (showCaption)
+        Text(
+          localPath == null && url == null
+              ? 'Ботаническая иллюстрация · добавьте своё фото'
+              : 'Фотография наблюдения · анализ изображения не выполняется',
+          style: const TextStyle(fontSize: 12, color: Color(0xff5c6d60)),
+        ),
+    ],
+  );
+}
+
+class ObservationHero extends StatelessWidget {
+  const ObservationHero({
+    super.key,
+    required this.photo,
+    required this.note,
+    required this.onRead,
+    this.onChoose,
+  });
+  final ObservationPhoto photo;
+  final String note;
+  final VoidCallback onRead;
+  final VoidCallback? onChoose;
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SizedBox(
+        height: 200,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: ObservationPhoto(
+                localPath: photo.localPath,
+                url: photo.url,
+                headers: photo.headers,
+                height: 200,
+                showCaption: false,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xffeef2e7),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Вы отметили',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: forest,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: Text(
+                        note,
+                        maxLines: 6,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.35,
+                          color: Color(0xff172b23),
+                        ),
+                      ),
+                    ),
+                    if (isIOS)
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 28),
+                        onPressed: onRead,
+                        child: const Text(
+                          'Читать полностью',
+                          style: TextStyle(fontSize: 13, color: forest),
+                        ),
+                      )
+                    else
+                      TextButton(
+                        onPressed: onRead,
+                        child: const Text(
+                          'Читать полностью',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
       const SizedBox(height: 6),
       Text(
-        localPath == null && url == null
+        photo.localPath == null && photo.url == null
             ? 'Ботаническая иллюстрация · добавьте своё фото'
-            : 'Фотография наблюдения · анализ изображения не выполняется',
-        style: const TextStyle(fontSize: 12, color: Color(0xff5c6d60)),
+            : 'Фото наблюдения · анализ изображения не выполняется',
+        style: const TextStyle(fontSize: 11, color: Color(0xff5c6d60)),
       ),
+      if (onChoose != null)
+        Align(
+          alignment: Alignment.centerRight,
+          child: isIOS
+              ? CupertinoButton(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  minimumSize: const Size(0, 28),
+                  onPressed: onChoose,
+                  child: const Text(
+                    'Выбрать наблюдение',
+                    style: TextStyle(fontSize: 13, color: forest),
+                  ),
+                )
+              : TextButton(
+                  onPressed: onChoose,
+                  child: const Text('Выбрать наблюдение'),
+                ),
+        ),
     ],
   );
 }
@@ -132,14 +258,17 @@ class EvidencePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final tools = List<String>.from(reply?['tools'] ?? []);
     final evidence = (reply?['artifact']?['evidence'] as List? ?? []);
-    const names = {
-      'field_history': 'История поля',
-      'weather': 'Погода',
-      'source_search': 'Проверенные источники',
-      'observation_get': 'Наблюдение',
-    };
+    final verified = evidence
+        .where((item) => item is Map && _verified(item['kind'], tools))
+        .toList();
+    const names = {'field_history': 'История поля', 'weather': 'Погода'};
+    final summary =
+        reply?['artifact']?['body'] ??
+        (reply == null
+            ? 'Опишите признаки. Сопоставим наблюдение с историей поля и погодой.'
+            : 'Контекст получен. Полный ответ доступен в обсуждении поля.');
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: forest,
         borderRadius: BorderRadius.circular(24),
@@ -170,43 +299,67 @@ class EvidencePanel extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              reply?['text'] ??
-                  'Опишите признаки и сохраните наблюдение. Агент сможет обратиться к истории поля, погоде и источникам.',
+              summary,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, height: 1.4),
             ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final entry in names.entries)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 9,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .08),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      '${tools.contains(entry.key) ? '✓' : '○'} ${entry.value}\n${tools.contains(entry.key) ? 'Получено из API' : 'Не запрошено в этом ответе'}',
-                      style: const TextStyle(fontSize: 13),
+                for (final entry in names.entries) ...[
+                  if (entry.key != 'field_history') const SizedBox(width: 8),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .08),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        '${tools.contains(entry.key) ? '✓' : '○'} ${entry.value}\n${tools.contains(entry.key) ? 'Получено из API' : 'Не запрошено в этом ответе'}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
                     ),
                   ),
+                ],
               ],
             ),
-            for (final item in evidence)
-              if (item is Map && _verified(item['kind'], tools))
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    item['summary'].toString(),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xffe7eedb),
-                    ),
+            const SizedBox(height: 10),
+            Text(
+              'Источники в ответе: ${(reply?['sources'] as List? ?? []).length}',
+              style: const TextStyle(fontSize: 12, color: Color(0xffdce9cd)),
+            ),
+            if (verified.isNotEmpty)
+              Theme(
+                data: Theme.of(
+                  context,
+                ).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  dense: true,
+                  iconColor: celery,
+                  collapsedIconColor: celery,
+                  title: const Text(
+                    'Полученные данные',
+                    style: TextStyle(fontSize: 13, color: Colors.white),
                   ),
+                  children: [
+                    for (final item in verified)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          item['summary'].toString(),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xffe7eedb),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
             if (busy)
               const Padding(
                 padding: EdgeInsets.only(top: 14),

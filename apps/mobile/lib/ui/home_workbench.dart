@@ -344,46 +344,43 @@ extension _Workbench on _HomeState {
       WorkbenchStages(
         stage: artifact?['stage'] ?? (reply != null ? 'context' : 'signs'),
       ),
-      ObservationPhoto(
-        localPath: local.firstOrNull,
-        url: photoId == null
-            ? null
-            : Uri.parse(apiBase).resolve(ApiRoutes.photo(photoId)).toString(),
-        headers: {'Authorization': 'Bearer ${model.session?['accessToken']}'},
-      ),
-      const SizedBox(height: 16),
-      if (hasDraft)
-        card(
-          'Вы отметили',
-          model.draft['note'] ?? 'Добавьте описание наблюдения ниже',
+      ObservationHero(
+        photo: ObservationPhoto(
+          localPath: local.firstOrNull,
+          url: photoId == null
+              ? null
+              : Uri.parse(apiBase).resolve(ApiRoutes.photo(photoId)).toString(),
+          headers: {'Authorization': 'Bearer ${model.session?['accessToken']}'},
         ),
-      if (o != null && !hasDraft)
-        card(
+        note: hasDraft
+            ? (model.draft['note'] ?? 'Добавьте описание наблюдения ниже')
+            : (o?['note'] ??
+                  'Добавьте фото и опишите, что вы заметили на поле.'),
+        onRead: () => showSheet(
           'Вы отметили',
-          o['note'] ?? '',
-          actions: [
-            Text(
-              observationDate(o['createdAt']),
-              style: const TextStyle(fontSize: 13),
+          () => [
+            SelectableText(
+              hasDraft
+                  ? (model.draft['note'] ?? '')
+                  : (o?['note'] ?? 'Наблюдение ещё не добавлено.'),
             ),
-            NativeButton(
-              onPressed: () => choose(
+            if (o != null && !hasDraft) Text(observationDate(o['createdAt'])),
+          ],
+        ),
+        onChoose: fieldObservations.length > 1
+            ? () => choose(
                 'Наблюдение для обсуждения',
                 {
                   for (final item in fieldObservations)
                     item['id']: item['note'].toString(),
                 },
-                (id) => updateUI(() {
-                  bindObservation(id);
-                }),
-              ),
-              child: const Text('Выбрать наблюдение'),
-            ),
-          ],
-        ),
+                (id) => updateUI(() => bindObservation(id)),
+              )
+            : null,
+      ),
       if (selectedField != null)
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           child: FieldMap(
             field: selectedField!,
             observations: fieldObservations,
