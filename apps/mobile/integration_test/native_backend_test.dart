@@ -106,6 +106,16 @@ void main() {
       await tester.tap(find.text('Осмотр'));
       await tester.pump();
       final noteInput = input('Что вы заметили?');
+      await tester.scrollUntilVisible(
+        noteInput,
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(RefreshIndicator),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.ensureVisible(noteInput);
       await tester.pump();
       await tester.enterText(noteInput, note);

@@ -25,6 +25,7 @@ class AppModel extends Notifier<int> {
   Map<String, dynamic> draft = {};
   String? activeField;
   Map<String, dynamic>? pendingChat;
+  Map<String, String> conversationContexts = {};
   String get draftKey => 'draft:$account:${activeField ?? 'new'}';
   List<Map<String, dynamic>> queue = [];
   String? error;
@@ -57,6 +58,9 @@ class AppModel extends Notifier<int> {
     draft = Map<String, dynamic>.from(await store.get(draftKey) ?? {});
     queue = await store.queue(account);
     pendingChat = await store.get('chat-pending:$account:$activeField');
+    conversationContexts = Map<String, String>.from(
+      await store.get('chat-contexts:$account:$activeField') ?? {},
+    );
   }
 
   Future<void> login(
@@ -154,6 +158,9 @@ class AppModel extends Notifier<int> {
   Future<void> selectField(String id) async {
     activeField = id;
     pendingChat = await store.get('chat-pending:$account:$id');
+    conversationContexts = Map<String, String>.from(
+      await store.get('chat-contexts:$account:$id') ?? {},
+    );
     await store.set('activeField:$account', id);
     draft = Map<String, dynamic>.from(await store.get(draftKey) ?? {});
     changed();

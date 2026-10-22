@@ -1,10 +1,22 @@
 part of '../main.dart';
 
 extension _Workbench on _HomeState {
+  void bindObservation(String? id) {
+    if (observationId != id) {
+      observationId = id;
+      conversationId = null;
+      chat.clear();
+    }
+  }
+
   Map? get selectedField =>
       items('fields').where((f) => f['id'] == fieldId).firstOrNull;
   List<dynamic> get fieldObservations =>
-      items('observations').where((o) => o['fieldId'] == fieldId).toList();
+      (items('observations').where((o) => o['fieldId'] == fieldId).toList()
+        ..sort(
+          (a, b) =>
+              a['createdAt'].toString().compareTo(b['createdAt'].toString()),
+        ));
   Map? get selectedObservation =>
       fieldObservations.where((o) => o['id'] == observationId).firstOrNull ??
       fieldObservations.lastOrNull;
@@ -13,8 +25,19 @@ extension _Workbench on _HomeState {
     final history = items(
       'conversations',
     ).where((c) => c['fieldId'] == fieldId).toList();
+    final contextId =
+        conversationId ?? model.conversationContexts[observationId ?? 'field'];
+    final contextual = history.where((c) => c['id'] == contextId).firstOrNull;
+    if (contextual != null) return List<dynamic>.from(contextual['messages']);
+    if (observationId != null) return [];
+    history.sort((a, b) => _lastMessageDate(a).compareTo(_lastMessageDate(b)));
     return history.isEmpty ? [] : List<dynamic>.from(history.last['messages']);
   }
+
+  String _lastMessageDate(Map conversation) =>
+      (conversation['messages'] as List? ?? []).lastOrNull?['createdAt']
+          ?.toString() ??
+      '';
 
   Map? get latestReply => contextMessages.reversed
       .where((m) => m['reply'] != null)
@@ -83,11 +106,18 @@ extension _Workbench on _HomeState {
       }
     },
   );
-  void providerSheet() => choose('Модель агента', {
-    for (final p in items('providers'))
-      p['id']:
-          '${p['id'] == 'deepseek' ? 'DeepSeek' : 'MiMo'}${p['configured'] == true ? '' : ' · не настроена'}',
-  }, (id) => updateUI(() => provider = id));
+  void providerSheet() => choose(
+    'Модель агента',
+    {
+      for (final p in items('providers'))
+        p['id']:
+            '${p['id'] == 'deepseek' ? 'DeepSeek' : 'MiMo'}${p['configured'] == true ? '' : ' · не настроена'}',
+    },
+    (id) {
+      updateUI(() => provider = id);
+      model.changed();
+    },
+  );
   Future<void> showSheet(String title, List<Widget> Function() content) async {
     Widget sheet(BuildContext c) => Material(
       color: ivory,
@@ -194,6 +224,27 @@ extension _Workbench on _HomeState {
   }
 
   Future<void> openConversation() => showSheet('Обсуждение поля', chatView);
+  Future<void> observationSheet(Map o) => showSheet(
+    'Наблюдение на карте',
+    () => [
+      heading(o['note'].toString()),
+      Text(observationDate(o['createdAt'])),
+      Text('Координаты: ${coordinateText(o['location'])}'),
+      for (final id in o['photoIds'] as List? ?? [])
+        ObservationPhoto(
+          url: Uri.parse(apiBase).resolve(ApiRoutes.photo(id)).toString(),
+          headers: {'Authorization': 'Bearer ${model.session?['accessToken']}'},
+        ),
+      NativeButton(
+        filled: true,
+        onPressed: () {
+          bindObservation(o['id']);
+          openConversation();
+        },
+        child: const Text('Обсудить наблюдение'),
+      ),
+    ],
+  );
   Future<void> expandMap() async {
     if (selectedField == null) return;
     await showSheet(
@@ -204,6 +255,7 @@ extension _Workbench on _HomeState {
           child: FieldMap(
             field: selectedField!,
             observations: fieldObservations,
+            onObservationTap: observationSheet,
             expanded: true,
           ),
         ),
@@ -272,6 +324,7 @@ extension _Workbench on _HomeState {
           child: FieldMap(
             field: selectedField!,
             observations: fieldObservations,
+            onObservationTap: observationSheet,
             onExpand: expandMap,
           ),
         ),
@@ -279,6 +332,8 @@ extension _Workbench on _HomeState {
       if (reply?['artifact']?['question'] != null)
         ...questionWidgets(reply!['artifact']['question']),
       if (reply != null) SourceDisclosure(sources: reply['sources'] ?? []),
+      if (artifact != null)
+        ...artifactActions(artifact, reply?['sources'] ?? []),
       if (artifact != null &&
           artifact['observationId'] != null &&
           artifact['observationVersion'] != null)
@@ -307,7 +362,7 @@ extension _Workbench on _HomeState {
         onPressed: chatBusy || fieldId == null
             ? null
             : () {
-                observationId = o?['id'];
+                bindObservation(o?['id']);
                 message.text = o == null
                     ? 'Помоги провести осмотр поля. Какие признаки нужно описать?'
                     : 'Проанализируй выбранное наблюдение: ${o['note']}. Сопоставь с историей поля, погодой и проверенными источниками. Уточни недостающие сведения.';
@@ -322,12 +377,85 @@ extension _Workbench on _HomeState {
         ),
       ),
       NativeButton.icon(
-        onPressed: openConversation,
+        onPressed: () {
+          bindObservation(o?['id']);
+          openConversation();
+        },
         icon: const Icon(CupertinoIcons.chat_bubble_2, color: forest),
         label: const Text('Обсудить свободно'),
       ),
       ...observationView(),
     ];
+  }
+
+  List<Widget> artifactActions(Map artifact, List<dynamic> sources) => [
+    Wrap(
+      spacing: 8,
+      children: [
+        for (final action in artifact['actions'] as List? ?? [])
+          if (const [
+            'reply',
+            'open_history',
+            'open_weather',
+            'start_revisit',
+            'view_sources',
+          ].contains(action))
+            NativeButton(
+              outlined: true,
+              onPressed: chatBusy
+                  ? null
+                  : () => performArtifactAction(action.toString(), sources),
+              child: Text(
+                const {
+                  'reply': 'Обсудить',
+                  'open_history': 'История поля',
+                  'open_weather': 'Погода',
+                  'start_revisit': 'Повторный осмотр',
+                  'view_sources': 'Источники',
+                }[action]!,
+              ),
+            ),
+      ],
+    ),
+  ];
+  Future<void> performArtifactAction(
+    String action,
+    List<dynamic> sources,
+  ) async {
+    switch (action) {
+      case 'reply':
+        await openConversation();
+      case 'open_history':
+        updateUI(() => tab = 0);
+      case 'view_sources':
+        await showSheet(
+          'Источники ответа',
+          () => [SourceDisclosure(sources: sources)],
+        );
+      case 'start_revisit':
+        final o = selectedObservation;
+        if (o != null) {
+          await model.editDraft('parentObservationId', o['id']);
+          await model.editDraft('note', 'Повторный осмотр: ');
+          if (mounted) updateUI(() => tab = 1);
+        }
+      case 'open_weather':
+        if (fieldId == null) return;
+        await act(() async {
+          final weather = await model.api.request(ApiRoutes.weather(fieldId!));
+          if (!mounted) return;
+          await showSheet(
+            'Погода поля',
+            () => [
+              Text('${weather['source']}'),
+              for (final d in weather['days'] as List)
+                Text(
+                  '${d['date']}: ${d['minC']}…${d['maxC']} °C · осадки ${d['rainMm']} мм',
+                ),
+            ],
+          );
+        });
+    }
   }
 
   List<Widget> questionWidgets(Map question) => [
@@ -351,7 +479,6 @@ extension _Workbench on _HomeState {
             onPressed: chatBusy
                 ? null
                 : () {
-                    observationId ??= selectedObservation?['id'];
                     message.text = option.toString();
                     sendChat();
                   },
@@ -367,7 +494,11 @@ extension _Workbench on _HomeState {
       ),
       NativeButton(
         filled: true,
-        onPressed: chatBusy ? null : sendChat,
+        onPressed: chatBusy
+            ? null
+            : () {
+                sendChat();
+              },
         child: const Text('Добавить ответ и продолжить'),
       ),
     ],
