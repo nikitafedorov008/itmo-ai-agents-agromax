@@ -196,7 +196,7 @@ void main() {
       await Scrollable.ensureVisible(
         tester.element(answerButton),
         alignment: .5,
-        duration: const Duration(milliseconds: 300),
+        duration: Duration.zero,
       );
       await tester.pump(const Duration(milliseconds: 400));
       expect(

@@ -35,9 +35,35 @@ void main() {
       find.textContaining('Погода\nНе запрошено в этом ответе'),
       findsOneWidget,
     );
+    expect(find.text('Проверенная история'), findsNothing);
+    await tester.tap(find.text('Полученные данные'));
+    await tester.pumpAndSettle();
     expect(find.text('Проверенная история'), findsOneWidget);
     expect(find.text('НЕПОДТВЕРЖДЕННАЯ ПОГОДА'), findsNothing);
   });
+  testWidgets(
+    'compact AI card uses the artifact summary and leaves full answer to chat',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: EvidencePanel(
+              busy: false,
+              reply: {
+                'text': 'ПОЛНЫЙ ДЛИННЫЙ ОТВЕТ ДЛЯ ОБСУЖДЕНИЯ',
+                'tools': [],
+                'sources': [],
+                'artifact': {'body': 'Краткое сопоставление контекста'},
+              },
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Краткое сопоставление контекста'), findsOneWidget);
+      expect(find.text('ПОЛНЫЙ ДЛИННЫЙ ОТВЕТ ДЛЯ ОБСУЖДЕНИЯ'), findsNothing);
+      expect(find.textContaining('Источники в ответе: 0'), findsOneWidget);
+    },
+  );
   testWidgets(
     'iOS observation input uses native text field and clears after saved draft',
     (tester) async {
