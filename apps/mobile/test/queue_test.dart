@@ -4,6 +4,9 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:agromax/api.dart';
 import 'package:agromax/storage.dart';
 import 'package:agromax/sync.dart';
+import 'package:agromax/chat_attempt.dart';
+import 'package:agromax/model.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class FakeApi extends Api {
   FakeApi() : super('test');
@@ -128,7 +131,9 @@ void main() {
       final api = FakeApi()..result = 'conflict';
       final engine = SyncEngine(store);
       await engine.drain('alice', api);
-      await engine.drain('alice', api);
+      await store.db.close();
+      store = await reopen();
+      await SyncEngine(store).drain('alice', api);
       final queue = await store.queue('alice');
       expect(api.calls.length, 1);
       expect(queue.first['status'], 'conflict');
@@ -149,6 +154,76 @@ void main() {
       '/durable/photo.jpg',
     ]);
   });
+
+  test(
+    'terminal chat marker persists until explicit retry after restart',
+    () async {
+      final failed = ChatAttempt.afterFailure({
+        'operationId': 'original',
+        'message': 'Осмотр',
+        'provider': 'deepseek',
+      }, ApiFailure(504, 'Таймаут', null, 'AGENT_TIMEOUT'));
+      await store.set('chat-pending:alice:field', failed);
+      await store.db.close();
+      store = await reopen();
+      final saved = Map<String, dynamic>.from(
+        await store.get('chat-pending:alice:field'),
+      );
+      expect(saved['operationId'], 'original');
+      final next = ChatAttempt.prepare(
+        saved,
+        newId: () => 'next',
+        provider: 'mimo',
+      );
+      expect(next['operationId'], 'next');
+      expect(next['message'], 'Осмотр');
+    },
+  );
+
+  test(
+    'conflict restoration retains original queue and all inspection data',
+    () async {
+      final payload = <String, dynamic>{
+        'id': 'obs',
+        'fieldId': 'field',
+        'note': 'Локальный текст',
+        'extent': 'Южная часть',
+        'location': {'lat': 55.0, 'lng': 37.0},
+        'photoIds': ['uploaded'],
+        'localPhotos': ['/documents/pending.jpg'],
+      };
+      await store.enqueue(
+        'farm:user',
+        'conflicted',
+        'observation.upsert',
+        payload,
+      );
+      await store.update('conflicted', 'conflict');
+      final container = ProviderContainer(
+        overrides: [storeProvider.overrideWithValue(store)],
+      );
+      final model = container.read(modelProvider.notifier);
+      model.session = {
+        'farm': {'id': 'farm'},
+        'user': {'id': 'user'},
+      };
+      await model.restoreConflict((await store.queue('farm:user')).single);
+      expect(model.draft['note'], payload['note']);
+      expect(model.draft['extent'], payload['extent']);
+      expect(model.draft['location'], payload['location']);
+      expect(model.draft['photoIds'], ['uploaded']);
+      expect(model.draft['localPhotos'], ['/documents/pending.jpg']);
+      expect(model.draft['parentObservationId'], 'obs');
+      container.dispose();
+      await store.db.close();
+      store = await reopen();
+      expect((await store.queue('farm:user')).single['payload'], payload);
+      expect(
+        (await store.get('draft:farm:user:field'))['note'],
+        payload['note'],
+      );
+    },
+  );
 
   test('synced operations are never resent', () async {
     await store.enqueue('alice', 'a', 'task.complete', {'id': 't'});
