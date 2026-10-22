@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type {
   AgentArtifact,
+  ArtifactAction,
   Bootstrap,
   Observation,
   Session,
@@ -130,10 +131,11 @@ function Workspace({
   const selectField = useCallback((id: string) => {
     setFieldId(id);
     setDetail("overview");
+    setObservationId("");
     setArtifact(null);
   }, []);
   const field = data?.fields.find((f) => f.id === fieldId),
-    observation = data?.observations.find((o) => o.id === observationId),
+    observation = data?.observations.find((o) => o.id === observationId && o.fieldId === fieldId) || data?.observations.filter(o => o.fieldId === fieldId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0],
     tasks = data?.tasks.filter((t) => t.fieldId === fieldId) || [],
     observations =
       data?.observations.filter((o) => o.fieldId === fieldId) || [];
@@ -146,7 +148,7 @@ function Workspace({
   function openObservation(o: Observation) {
     setObservationId(o.id);
     setDetail("observation");
-    setPanel("detail");
+    setPanel("chat");
     setArtifact(null);
   }
   async function markRead(id: string) {
@@ -163,7 +165,6 @@ function Workspace({
   function showArtifact(a: AgentArtifact) {
     setArtifact(a);
     setDetail("overview");
-    setPanel("detail");
     if (a.observationId) {
       setObservationId(a.observationId);
       setDetail("observation");
@@ -266,7 +267,7 @@ function Workspace({
       <div className="workspace-heading">
         <div>
           <span className="eyebrow">ПОЛЕВОЙ КОНТРОЛЬ</span>
-          <h1>Ваши поля. Ясная картина.</h1>
+          <h1>Рабочее место агронома</h1>
         </div>
         <div className="today">
           <span className="context-dot" />
@@ -327,8 +328,8 @@ function Workspace({
           <nav className="mobile-tabs" aria-label="Разделы рабочего места">
             {[
               ["fields", "Поля", Map],
-              ["chat", "Помощник", MessageSquare],
-              ["detail", "Материалы", ClipboardList],
+              ["chat", "Осмотр", Leaf],
+              ["detail", "Задачи и история", ClipboardList],
             ].map(([id, title, Icon]) => (
               <button
                 key={id as string}
@@ -370,6 +371,8 @@ function Workspace({
                   fields={data.fields}
                   selected={fieldId}
                   onSelect={selectField}
+                  observations={data.observations}
+                  onObservation={openObservation}
                 />
                 {data.demo && (
                   <span className="map-caption">
@@ -420,26 +423,27 @@ function Workspace({
                 field={field}
                 data={data}
                 onRefresh={() => void refresh()}
-                observation={
-                  detail === "observation" && observation?.fieldId === fieldId
-                    ? observation
-                    : undefined
-                }
+                observation={observation}
+                onAction={(action: ArtifactAction) => {
+                  if (action === "start_revisit" && observation) newObservation(observation.id);
+                  else {if(action!=="review_observation")setArtifact(null); setPanel("detail"); setDetail(action === "open_history" ? "history" : action === "review_observation" && observation ? "observation" : "overview");}
+                }}
                 onArtifact={showArtifact}
                 onObservation={() => newObservation()}
               />
             </div>
             <aside
               className={
-                "context-panel mobile-" + (panel === "detail" ? "show" : "hide")
+                "context-panel materials-drawer " + (panel === "detail" ? "drawer-visible" : "drawer-hidden")
               }
+              aria-label="Материалы выбранного поля"
             >
               <div className="panel-header">
                 <div>
                   <span className="eyebrow">КОНТЕКСТ И МАТЕРИАЛЫ</span>
                   <h2>{field.name}</h2>
                 </div>
-                <ClipboardList size={19} />
+                <button className="outline" onClick={()=>setPanel("chat")}>Закрыть</button>
               </div>
               <nav className="context-tabs" aria-label="Материалы поля">
                 <button

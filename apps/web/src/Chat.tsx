@@ -3,6 +3,7 @@ import { ArrowUp, Sparkles, Plus, BookOpen } from "lucide-react";
 import {
   ApiClient,
   type AgentArtifact,
+  type ArtifactAction,
   type AgentReply,
   type Bootstrap,
   type Conversation,
@@ -11,6 +12,8 @@ import {
   type Observation,
 } from "@agromax/contracts";
 import { clearOperation, errorText, operationId } from "./api";
+import { Workbench } from "./Workbench";
+import { latestReply, chatPayload } from "./workbenchLogic";
 import { isTerminalAgentFailure } from "./chatRetry";
 export function Chat({
   api,
@@ -20,6 +23,7 @@ export function Chat({
   onArtifact,
   onObservation,
   observation,
+  onAction,
 }: {
   api: ApiClient;
   field: Field;
@@ -28,6 +32,7 @@ export function Chat({
   onArtifact: (a: AgentArtifact) => void;
   onObservation: () => void;
   observation?: Observation;
+  onAction: (action: ArtifactAction) => void;
 }) {
   const conversations = data.conversations.filter(
     (c) => c.fieldId === field.id,
@@ -40,6 +45,8 @@ export function Chat({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [terminalKey, setTerminalKey] = useState<string | null>(null);
+  const drawer = useRef<HTMLDialogElement>(null);
+  const [localConversation, setLocalConversation] = useState<Conversation>();
   const messagesRef = useRef<HTMLDivElement>(null);
   const abort = useRef<AbortController | null>(null);
   const active = useRef(true);
@@ -50,7 +57,11 @@ export function Chat({
       abort.current?.abort();
     };
   }, []);
-  const conversation = conversations.find((c) => c.id === conversationId);
+  const conversation = localConversation?.id === conversationId ? localConversation : conversations.find((c) => c.id === conversationId);
+  const reply = latestReply(conversation, observation);
+  useEffect(() => {
+    if (reply?.provider) setProvider(reply.provider);
+  }, [conversationId, reply?.provider]);
   useEffect(() => {
     if (!conversation?.messages.length && !busy) return;
     const list = messagesRef.current;
@@ -69,14 +80,17 @@ export function Chat({
     e.preventDefault();
     await sendMessage(false);
   }
-  async function sendMessage(newAttempt: boolean) {
-    if (needsNewAttempt && !newAttempt) return;
-    if (newAttempt) clearOperation(currentKey);
-    if (!message.trim() || busy) return;
+  async function sendMessage(newAttempt: boolean, answer?: string) {
+    const outgoing = answer ?? message;
+    const requestPayload = chatPayload(field.id, conversationId, outgoing, provider, observation?.id);
+    const requestKey = "chat:" + JSON.stringify(requestPayload);
+    if (terminalKey === requestKey && !newAttempt) { drawer.current?.showModal(); return; }
+    if (newAttempt) clearOperation(requestKey);
+    if (!outgoing.trim() || busy) return;
     setBusy(true);
     setError("");
     setTerminalKey(null);
-    const key = currentKey;
+    const key = requestKey;
     const controller = new AbortController();
     abort.current = controller;
     try {
@@ -85,12 +99,13 @@ export function Chat({
         reply: AgentReply;
       }>("/api/agent/chat", {
         method: "POST",
-        body: JSON.stringify({ ...payload, operationId: operationId(key) }),
+        body: JSON.stringify({ ...requestPayload, operationId: operationId(key) }),
         signal: controller.signal,
       });
       if (!active.current) return;
       clearOperation(key);
       setConversationId(r.conversation.id);
+      setLocalConversation(r.conversation);
       setMessage("");
       if (r.reply.artifact) onArtifact(r.reply.artifact);
       onRefresh();
@@ -107,7 +122,12 @@ export function Chat({
     }
   }
   return (
-    <section className="chat-panel">
+    <section className="workbench-panel">
+      <div className="workbench-heading"><div><span className="eyebrow">ОСМОТР ПОЛЯ</span><h2>{field.name} <span>· {field.crop}</span></h2></div><label>Модель<select aria-label="Модель анализа" disabled={busy} value={provider} onChange={e=>setProvider(e.target.value as Provider)}>{data.providers.map(p=><option key={p.id} value={p.id}>{p.id === "deepseek" ? "DeepSeek" : "MiMo"}{p.configured ? "" : " · не подключена"}</option>)}</select></label></div>
+      <Workbench api={api} observation={observation} reply={reply} busy={busy} onSend={answer=>{setMessage(answer);void sendMessage(false, answer)}} onObserve={onObservation} onDiscuss={()=>drawer.current?.showModal()} onAction={action=>action === "reply"?drawer.current?.showModal():onAction(action)}/>
+      {error && <div className="error workbench-error" role="alert">{error}<button className="text-button" onClick={()=>drawer.current?.showModal()}>Открыть запрос и повторить</button></div>}
+      <dialog ref={drawer} className="discussion-dialog" aria-label="Обсуждение поля"><div className="chat-panel">
+      <button className="outline close-discussion" onClick={()=>drawer.current?.close()}>Закрыть обсуждение</button>
       <header className="panel-header">
         <div>
           <span className="eyebrow">АГРОНОМИЧЕСКИЙ ПОМОЩНИК</span>
@@ -122,6 +142,7 @@ export function Chat({
           disabled={busy}
           onClick={() => {
             setConversationId(undefined);
+            setLocalConversation(undefined);
             setError("");
           }}
         >
@@ -155,7 +176,7 @@ export function Chat({
           aria-label="История разговоров"
           disabled={busy}
           value={conversationId || ""}
-          onChange={(e) => setConversationId(e.target.value || undefined)}
+          onChange={(e) => {setConversationId(e.target.value || undefined); setLocalConversation(undefined)}}
         >
           <option value="">Новый разговор</option>
           {conversations.map((c) => (
@@ -298,6 +319,6 @@ export function Chat({
         </form>
         <small>Проверяйте выводы ИИ. Действия подтверждает агроном.</small>
       </div>
-    </section>
+    </div></dialog></section>
   );
 }
