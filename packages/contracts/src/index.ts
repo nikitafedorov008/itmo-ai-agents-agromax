@@ -6,7 +6,10 @@ export interface Photo {id:string; url:string; name:string; mimeType:string}
 export interface Observation {id:string; fieldId:string; note:string; extent?:string; location?:Point; photoIds:string[]; status:'draft'|'approved'; version:number; createdAt:string; approvedAt?:string; parentObservationId?:string}
 export interface Task {id:string; fieldId:string; observationId:string; title:string; dueAt:string; status:'open'|'done'; outcome?:string; version:number; createdAt:string}
 export interface Source {id:string; title:string; url:string; excerpt:string; version:string}
-export interface AgentArtifact {kind:'clarification'|'observation'|'summary'; title:string; body:string; observationId?:string; observationVersion?:number; proposedTask?:{title:string; dueAt:string}}
+export type ArtifactAction = 'reply'|'review_observation'|'start_revisit'|'open_history'|'open_weather'|'view_sources';
+export interface AgentQuestion {prompt:string; options:string[]; allowCustom:boolean}
+export interface AgentEvidence {kind:'observation'|'history'|'weather'|'source'; summary:string}
+export interface AgentArtifact {stage?:'signs'|'context'|'decision'; question?:AgentQuestion; evidence?:AgentEvidence[]; actions?:ArtifactAction[];kind:'clarification'|'observation'|'summary'; title:string; body:string; observationId?:string; observationVersion?:number; proposedTask?:{title:string; dueAt:string}}
 export interface AgentReply {id:string; text:string; provider:Provider; model:string; sources:Source[]; tools:string[]; artifact?:AgentArtifact; requiresConfirmation:boolean; createdAt:string}
 export interface Message {id:string; role:'user'|'assistant'; text:string; createdAt:string; reply?:AgentReply}
 export interface Conversation {id:string; fieldId:string; messages:Message[]}

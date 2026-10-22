@@ -989,9 +989,88 @@
         ],
         "additionalProperties": false
       },
+      "ArtifactAction": {
+        "type": "string",
+        "enum": [
+          "reply",
+          "review_observation",
+          "start_revisit",
+          "open_history",
+          "open_weather",
+          "view_sources"
+        ]
+      },
+      "AgentQuestion": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowCustom": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "prompt",
+          "options",
+          "allowCustom"
+        ],
+        "additionalProperties": false
+      },
+      "AgentEvidence": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "observation",
+              "history",
+              "weather",
+              "source"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "summary"
+        ],
+        "additionalProperties": false
+      },
       "AgentArtifact": {
         "type": "object",
         "properties": {
+          "stage": {
+            "type": "string",
+            "enum": [
+              "signs",
+              "context",
+              "decision"
+            ]
+          },
+          "question": {
+            "$ref": "#/components/schemas/AgentQuestion"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentEvidence"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactAction"
+            }
+          },
           "kind": {
             "type": "string",
             "enum": [
