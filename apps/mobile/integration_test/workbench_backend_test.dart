@@ -189,12 +189,23 @@ void main() {
       expect(find.text(prompt), findsOneWidget);
       expect(find.widgetWithText(NativeButton, options.first), findsOneWidget);
       expect(find.byType(CupertinoTabBar), findsOneWidget);
-      await tester.ensureVisible(find.text(options.last));
-    await tester.pump(const Duration(milliseconds: 300));
-    await binding.takeScreenshot('agromax-native-workbench-real-question');
       final answer = options.first;
-      await tester.ensureVisible(find.text(answer));
-      await tester.tap(find.text(answer));
+      final answerButton = find.widgetWithText(NativeButton, answer);
+      // Center the actual control in the viewport: top alignment can leave its
+      // hit point beneath the native navigation/field-selector overlay.
+      await Scrollable.ensureVisible(
+        tester.element(answerButton),
+        alignment: .5,
+        duration: const Duration(milliseconds: 300),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        answerButton.hitTestable(),
+        findsOneWidget,
+        reason: 'Actual returned answer must be visibly tappable',
+      );
+      await binding.takeScreenshot('agromax-native-workbench-real-question');
+      await tester.tap(answerButton.hitTestable());
       final originalMessageCount =
           (firstConversation['messages'] as List).length;
       await shared.until(
