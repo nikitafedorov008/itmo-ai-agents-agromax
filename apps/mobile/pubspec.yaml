@@ -46,6 +46,8 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   http_parser: ^4.1.2
   mime: ^2.1.0
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
 
 dev_dependencies:
   integration_test:
@@ -73,6 +75,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo.svg
+    - assets/wheat-leaf.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
