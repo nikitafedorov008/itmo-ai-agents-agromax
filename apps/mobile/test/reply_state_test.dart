@@ -67,7 +67,7 @@ void main() {
     },
   );
   test(
-    'approved observation only offers revisit even with matching historical version',
+    'approved current observation keeps fresh clarification but never another approval',
     () {
       final view = currentReply(response(), [
         {'id': 'observation', 'version': 1, 'status': 'approved'},
@@ -76,10 +76,23 @@ void main() {
       expect(view['_canRevisit'], true);
       expect(view['_observationId'], 'observation');
       expect(view['_artifactNotice'], contains('уже утверждено'));
-      expect(view['artifact']['question'], isNull);
+      expect(view['artifact']['question'], isNotNull);
+      expect(view['artifact']['actions'], contains('reply'));
+      expect(
+        view['artifact']['actions'],
+        isNot(contains('review_observation')),
+      );
       expect(view['artifact']['proposedTask'], isNull);
     },
   );
+  test('stale approved observation still hides obsolete clarification', () {
+    final view = currentReply(response(), [
+      {'id': 'observation', 'version': 2, 'status': 'approved'},
+    ]);
+    expect(view['artifact']['question'], isNull);
+    expect(view['artifact']['actions'], isNot(contains('reply')));
+    expect(view['_canReview'], false);
+  });
   test('missing observation cannot expose historical approval command', () {
     final view = currentReply(response(), []);
     expect(view['_canReview'], false);

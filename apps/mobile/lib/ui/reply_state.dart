@@ -20,21 +20,23 @@ Map<String, dynamic> currentReply(
       current != null &&
       artifact['observationId'] == current['id'] &&
       artifact['observationVersion'] == current['version'];
+  if (stale) artifact.remove('question');
   if (stale || approved) {
-    artifact.remove('question');
     artifact.remove('proposedTask');
     artifact['actions'] = (artifact['actions'] as List? ?? [])
         .where(
-          (a) => const [
-            'open_history',
-            'open_weather',
-            'view_sources',
-            'start_revisit',
-          ].contains(a),
+          (a) =>
+              (!stale && a == 'reply') ||
+              const [
+                'open_history',
+                'open_weather',
+                'view_sources',
+                'start_revisit',
+              ].contains(a),
         )
         .toList();
     result['_artifactNotice'] = approved
-        ? 'Наблюдение уже утверждено. Ответ сохранён как история; для новых сведений создайте повторный осмотр.'
+        ? 'Наблюдение уже утверждено. Обсуждение доступно; для новых записей создайте повторный осмотр.'
         : 'Наблюдение изменилось после этого ответа. Источники и контекст сохранены; обновите анализ перед решением.';
     result['requiresConfirmation'] = false;
   }

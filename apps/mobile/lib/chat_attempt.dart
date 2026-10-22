@@ -15,7 +15,33 @@ abstract final class ChatAttempt {
     'AGENT_FAILED',
     'RUN_INTERRUPTED',
   };
+  static bool matchesContext(
+    Map? pending, {
+    required String? fieldId,
+    required String? observationId,
+  }) =>
+      pending == null ||
+      (pending['fieldId'] == fieldId &&
+          pending['observationId'] == observationId);
+
   static bool isTerminal(Map pending) => pending['_terminalError'] != null;
+
+  static Map<String, dynamic> prepareForContext(
+    Map<String, dynamic> pending, {
+    required String? fieldId,
+    required String? observationId,
+    required String Function() newId,
+    required String provider,
+  }) {
+    if (!matchesContext(
+      pending,
+      fieldId: fieldId,
+      observationId: observationId,
+    )) {
+      throw StateError('Pending chat belongs to another observation context');
+    }
+    return prepare(pending, newId: newId, provider: provider);
+  }
 
   static Map<String, dynamic> prepare(
     Map<String, dynamic> pending, {

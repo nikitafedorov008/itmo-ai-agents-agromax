@@ -147,7 +147,7 @@ class NativeButton extends StatelessWidget {
           ],
         );
     if (isIOS) {
-      return CupertinoButton(
+      final button = CupertinoButton(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         color: filled ? forest : null,
         borderRadius: BorderRadius.circular(20),
@@ -161,6 +161,16 @@ class NativeButton extends StatelessWidget {
           child: content,
         ),
       );
+      return outlined
+          ? DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xffeef2e7),
+                border: Border.all(color: const Color(0xffa6b9a4)),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: button,
+            )
+          : button;
     }
     if (filled) return FilledButton(onPressed: onPressed, child: content);
     if (outlined) return OutlinedButton(onPressed: onPressed, child: content);

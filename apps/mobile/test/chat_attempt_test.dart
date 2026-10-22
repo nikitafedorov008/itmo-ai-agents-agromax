@@ -100,4 +100,78 @@ void main() {
       expect(next, request);
     }
   });
+  test(
+    'cross-observation pending request is blocked before generating a billable attempt id',
+    () {
+      final pending = <String, dynamic>{
+        'fieldId': 'field',
+        'observationId': 'A',
+        'message': 'Original A',
+        'operationId': 'stable-A',
+        'provider': 'deepseek',
+        '_terminalError': 'AGENT_ERROR',
+      };
+      var idsGenerated = 0;
+      expect(
+        ChatAttempt.matchesContext(
+          pending,
+          fieldId: 'field',
+          observationId: 'B',
+        ),
+        false,
+      );
+      expect(
+        () => ChatAttempt.prepareForContext(
+          pending,
+          fieldId: 'field',
+          observationId: 'B',
+          newId: () {
+            idsGenerated++;
+            return 'new';
+          },
+          provider: 'mimo',
+        ),
+        throwsStateError,
+      );
+      expect(idsGenerated, 0);
+      expect(pending['operationId'], 'stable-A');
+      expect(pending['message'], 'Original A');
+    },
+  );
+  test(
+    'explicit resume preserves ambiguous attempt id and original message in its own context',
+    () {
+      final pending = <String, dynamic>{
+        'fieldId': 'field',
+        'observationId': 'A',
+        'message': 'Original A',
+        'operationId': 'stable-A',
+        'provider': 'deepseek',
+      };
+      final resumed = ChatAttempt.prepareForContext(
+        pending,
+        fieldId: 'field',
+        observationId: 'A',
+        newId: () => throw StateError('Must not allocate id'),
+        provider: 'mimo',
+      );
+      expect(resumed, pending);
+      expect(
+        ChatAttempt.matchesContext(
+          pending,
+          fieldId: 'other-field',
+          observationId: 'A',
+        ),
+        false,
+      );
+      expect(
+        ChatAttempt.matchesContext(
+          pending,
+          fieldId: 'field',
+          observationId: null,
+        ),
+        false,
+      );
+    },
+  );
 }
