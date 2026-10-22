@@ -7,7 +7,7 @@ import { startScheduler } from '../src/scheduler.js';
 import type { Repository } from '../src/repository.js';
 const fieldId=randomUUID(),obsId=randomUUID();
 const field={id:fieldId,name:'Тест',crop:'Пшеница',areaHa:1,center:{lat:55,lng:37},boundary:[],demo:true};
-const cfg=config({DEEPSEEK_API_KEY:'test-key',AGENT_TIMEOUT_MS:'1000'});
+const cfg=config({SUPABASE_SERVICE_ROLE_KEY:'test-service-key',DEEPSEEK_API_KEY:'test-key',AGENT_TIMEOUT_MS:'1000'});
 function fixture(){
  const record={id:obsId,fieldId,note:'Лист желтеет',photoIds:[],version:1,status:'draft',createdAt:new Date().toISOString()};
  const runs=new Map<string,any>();const operations=new Map<string,any>();let observations=[record];

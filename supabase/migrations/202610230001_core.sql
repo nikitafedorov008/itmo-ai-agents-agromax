@@ -31,7 +31,7 @@ end loop; end $$;
 insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types) values('field-photos','field-photos',false,10485760,array['image/jpeg','image/png','image/webp']) on conflict(id) do nothing;
 create policy private_photo_read on storage.objects for select to authenticated using(bucket_id='field-photos' and (storage.foldername(name))[1]=public.current_farm()::text);
 create policy private_photo_insert on storage.objects for insert to authenticated with check(bucket_id='field-photos' and (storage.foldername(name))[1]=public.current_farm()::text);
-create policy private_photo_delete on storage.objects for delete to authenticated using(bucket_id='field-photos' and (storage.foldername(name))[1]=public.current_farm()::text);
+create policy private_photo_delete on storage.objects for delete to authenticated using(bucket_id='field-photos' and (storage.foldername(name))[1]=public.current_farm()::text and not exists(select 1 from public.photos p join public.observations o on o.farm_id=p.farm_id where p.path=name and (o.data->'photoIds') ? p.id::text));
 
 create function public.initialize_farm(p_name text default 'Моё хозяйство') returns jsonb language plpgsql security definer set search_path=public,extensions as $$
 declare f farms; u auth.users; fid uuid; loc jsonb; b jsonb; i integer;
@@ -54,6 +54,37 @@ end if;
 return jsonb_build_object('farm',jsonb_build_object('id',f.id,'name',f.name),'demo',f.demo,'role',(select role from members where user_id=auth.uid()));
 end $$;
 
+-- These validators execute inside domain RPCs, including direct PostgREST calls.
+create function public.dto_keys(p jsonb,required text[],optional text[] default '{}') returns boolean language sql immutable as $$
+select jsonb_typeof(p)='object' and p ?& required and not exists(select 1 from jsonb_object_keys(p) k where not(k=any(required||optional)))
+$$;
+create function public.dto_uuid(p jsonb) returns boolean language sql immutable as $$select jsonb_typeof(p)='string' and (p#>>'{}') ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'$$;
+create function public.dto_point(p jsonb) returns boolean language plpgsql immutable set search_path=public as $$begin
+return coalesce(dto_keys(p,array['lat','lng']) and jsonb_typeof(p->'lat')='number' and jsonb_typeof(p->'lng')='number' and (p->>'lat')::numeric between -90 and 90 and (p->>'lng')::numeric between -180 and 180,false);
+exception when others then return false;end $$;
+create function public.dto_task(p jsonb) returns boolean language plpgsql immutable set search_path=public as $$begin
+if not coalesce(dto_keys(p,array['title','dueAt']) and jsonb_typeof(p->'title')='string' and length(trim(p->>'title')) between 1 and 300 and jsonb_typeof(p->'dueAt')='string' and (p->>'dueAt') ~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$',false) then return false;end if;
+perform (p->>'dueAt')::timestamptz;return true;
+exception when others then return false;end $$;
+create function public.dto_operation(kind text,p jsonb) returns boolean language plpgsql immutable set search_path=public as $$declare x jsonb;begin
+if kind='field.create' then
+if not coalesce(dto_keys(p,array['name','crop','areaHa','center','boundary','confirmed']) and p->'confirmed'='true'::jsonb and jsonb_typeof(p->'name')='string' and length(trim(p->>'name')) between 1 and 120 and jsonb_typeof(p->'crop')='string' and length(trim(p->>'crop')) between 1 and 120 and jsonb_typeof(p->'areaHa')='number' and (p->>'areaHa')::numeric>0 and (p->>'areaHa')::numeric<=1000000 and dto_point(p->'center') and jsonb_typeof(p->'boundary')='array',false) then return false;end if;
+if jsonb_array_length(p->'boundary')<>0 and jsonb_array_length(p->'boundary') not between 3 and 200 then return false;end if;
+for x in select value from jsonb_array_elements(p->'boundary') loop if not dto_point(x) then return false;end if;end loop;return true;
+elsif kind='observation.upsert' then
+if not coalesce(dto_keys(p,array['fieldId','note','photoIds'],array['id','extent','location','parentObservationId','version']) and dto_uuid(p->'fieldId') and jsonb_typeof(p->'note')='string' and length(trim(p->>'note')) between 1 and 10000 and jsonb_typeof(p->'photoIds')='array',false) then return false;end if;
+if jsonb_array_length(p->'photoIds')>20 then return false;end if;
+for x in select value from jsonb_array_elements(p->'photoIds') loop if not dto_uuid(x) then return false;end if;end loop;
+if p ? 'id' and not dto_uuid(p->'id') or p ? 'parentObservationId' and not dto_uuid(p->'parentObservationId') or p ? 'location' and not dto_point(p->'location') then return false;end if;
+if p ? 'extent' and (jsonb_typeof(p->'extent')<>'string' or length(p->>'extent')>500) then return false;end if;
+if p ? 'version' and (jsonb_typeof(p->'version')<>'number' or (p->>'version')::numeric<1 or (p->>'version')::numeric<>trunc((p->>'version')::numeric) or (p->>'version')::numeric>2147483647) then return false;end if;return true;
+elsif kind in ('observation.approve','task.complete') then
+if not coalesce(dto_keys(p,array['id','version','confirmed']||case when kind='task.complete' then array['outcome'] else '{}'::text[] end,case when kind='observation.approve' then array['task'] else '{}'::text[] end) and dto_uuid(p->'id') and p->'confirmed'='true'::jsonb and jsonb_typeof(p->'version')='number' and (p->>'version')::numeric between 1 and 2147483647 and (p->>'version')::numeric=trunc((p->>'version')::numeric),false) then return false;end if;
+if kind='task.complete' then return jsonb_typeof(p->'outcome')='string' and length(trim(p->>'outcome')) between 1 and 5000;end if;
+return not(p ? 'task') or dto_task(p->'task');
+end if;return false;
+exception when others then return false;end $$;
+
 create function public.apply_operation(p_operation_id uuid,p_type text,p_payload jsonb) returns jsonb language plpgsql security definer set search_path=public as $$
 declare f uuid:=current_farm(); old jsonb; result jsonb; fp jsonb:=jsonb_build_object('type',p_type,'payload',p_payload); rid uuid; v integer; field uuid; task jsonb; role_name text; photo text; geom extensions.geometry; coords jsonb; tstamp text:=to_char(now() at time zone 'utc','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
 begin
@@ -64,19 +95,7 @@ if found then
 if old<>fp then return jsonb_build_object('error','operationId уже использован для другого запроса','code','IDEMPOTENCY_MISMATCH','status',409); end if;
 return result;
 end if;
--- Validate inside the trust boundary too: authenticated callers can invoke RPC directly.
-if jsonb_typeof(p_payload)<>'object' or p_operation_id is null then return jsonb_build_object('error','Неверная операция','code','INVALID','status',400); end if;
-if p_type='observation.upsert' then
-if coalesce(length(trim(p_payload->>'note')),0) not between 1 and 10000 or jsonb_typeof(p_payload->'photoIds') is distinct from 'array' or jsonb_array_length(p_payload->'photoIds')>20 or p_payload->>'fieldId' is null then return jsonb_build_object('error','Неверное наблюдение','code','INVALID','status',400); end if;
-if p_payload ? 'location' and (jsonb_typeof(p_payload->'location'->'lat') is distinct from 'number' or jsonb_typeof(p_payload->'location'->'lng') is distinct from 'number' or (p_payload->'location'->>'lat')::numeric not between -90 and 90 or (p_payload->'location'->>'lng')::numeric not between -180 and 180) then return jsonb_build_object('error','Неверная геопозиция','code','INVALID','status',400); end if;
-elsif p_type<>'field.create' then
-if p_payload->>'id' is null or coalesce((p_payload->>'version')::integer,0)<1 then return jsonb_build_object('error','Нужны id и версия','code','INVALID','status',400); end if;
-end if;
-if p_type='observation.approve' and p_payload ? 'task' then
-if coalesce(length(trim(p_payload->'task'->>'title')),0) not between 1 and 300 or p_payload->'task'->>'dueAt' is null then return jsonb_build_object('error','Неверная задача','code','INVALID','status',400); end if;
-perform (p_payload->'task'->>'dueAt')::timestamptz;
-end if;
-if p_type='task.complete' and coalesce(length(trim(p_payload->>'outcome')),0) not between 1 and 5000 then return jsonb_build_object('error','Нужен результат выполнения','code','INVALID','status',400); end if;
+if p_operation_id is null or not dto_operation(p_type,p_payload) then return jsonb_build_object('error','Неверная операция: проверьте типы, подтверждение и обязательные поля','code','INVALID','status',400); end if;
 select role into role_name from members where user_id=auth.uid();
 rid:=(p_payload->>'id')::uuid;
 if p_type='field.create' then
@@ -150,7 +169,8 @@ create function public.register_photo(p_id uuid,p_name text,p_mime text) returns
 declare f uuid:=current_farm(); result jsonb;
 begin
 if f is null then raise exception 'unauthorized'; end if;
-if p_mime not in ('image/jpeg','image/png','image/webp') then raise exception 'invalid image type'; end if;
+if p_id is null or p_name is null or length(trim(p_name)) not between 1 and 180 or p_mime is null or p_mime not in ('image/jpeg','image/png','image/webp') then raise exception 'invalid image type'; end if;
+if not exists(select 1 from storage.objects where bucket_id='field-photos' and name=f::text||'/'||p_id and metadata->>'mimetype'=p_mime and (metadata->>'size')::bigint between 1 and 10485760) then raise exception 'photo object not found'; end if;
 result:=jsonb_build_object('id',p_id,'name',left(p_name,180),'mimeType',p_mime,'url','/api/photos/'||p_id);
 insert into photos(id,farm_id,path,data) values(p_id,f,f::text||'/'||p_id,result);
 return result;
@@ -177,9 +197,11 @@ if (select count(*) from agent_runs where farm_id=f and created_at>now()-interva
 insert into agent_runs(farm_id,operation_id,fingerprint,status) values(f,p_operation_id,p_fingerprint,'running');
 return jsonb_build_object('started',true);
 end $$;
-create function public.finish_agent(p_operation_id uuid,p_conversation jsonb,p_result jsonb,p_error text default null) returns void language plpgsql security definer set search_path=public as $$
-declare f uuid:=current_farm(); r agent_runs; old jsonb;
+create function public.finish_agent(p_actor uuid,p_operation_id uuid,p_conversation jsonb,p_result jsonb,p_error text default null) returns void language plpgsql security definer set search_path=public as $$
+declare f uuid; r agent_runs; old jsonb;
 begin
+select farm_id into f from members where user_id=p_actor;
+if f is null then raise exception 'actor has no farm'; end if;
 select * into r from agent_runs where farm_id=f and operation_id=p_operation_id for update;
 if not found or r.status<>'running' then raise exception 'run not running'; end if;
 if p_error is not null then update agent_runs set status='failed',error_code=left(p_error,80) where id=r.id; return; end if;
@@ -214,6 +236,9 @@ end $$;
 -- Domain RPCs are invoker-authenticated and bypass table writes only after farm checks.
 revoke all on all functions in schema public from public,anon;
 grant execute on function public.current_farm() to authenticated;
-grant execute on function public.initialize_farm(text),public.apply_operation(uuid,text,jsonb),public.register_photo(uuid,text,text),public.read_notification(uuid),public.begin_agent(uuid,jsonb),public.finish_agent(uuid,jsonb,jsonb,text) to authenticated;
+grant execute on function public.initialize_farm(text),public.apply_operation(uuid,text,jsonb),public.register_photo(uuid,text,text),public.read_notification(uuid),public.begin_agent(uuid,jsonb) to authenticated;
 revoke all on function public.run_scheduler(timestamptz) from authenticated;
 grant execute on function public.run_scheduler(timestamptz) to service_role;
+
+revoke all on function public.finish_agent(uuid,uuid,jsonb,jsonb,text) from authenticated,anon,public;
+grant execute on function public.finish_agent(uuid,uuid,jsonb,jsonb,text) to service_role;

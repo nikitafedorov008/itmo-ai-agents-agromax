@@ -14,7 +14,7 @@ export interface Repository {
 function check<T>({data,error}:{data:T;error:any}):T {if(error)throw new ApiFailure(503,'DATABASE_UNAVAILABLE','Хранилище временно недоступно');return data;}
 export function client(cfg:Config,token?:string,key=cfg.anonKey){if(!key)throw new ApiFailure(503,'STORAGE_UNCONFIGURED','Supabase не настроен');return createClient(cfg.supabaseUrl,key,{auth:{persistSession:false,autoRefreshToken:false},global:token?{headers:{Authorization:`Bearer ${token}`}}:undefined});}
 export class SupabaseRepository implements Repository {
- constructor(public db:SupabaseClient){}
+ constructor(public db:SupabaseClient,private admin?:SupabaseClient,private actor?:string){}
  async context(){const membership=check(await this.db.from('members').select('role,farm_id').single());if(!membership)throw new ApiFailure(401,'UNAUTHORIZED','Войдите в систему');const f=check(await this.db.from('farms').select('id,name,demo').eq('id',membership.farm_id).single());if(!f)throw new ApiFailure(401,'UNAUTHORIZED','Хозяйство не найдено');return {farm:{id:f.id,name:f.name},demo:f.demo,role:membership.role} as FarmContext;}
  async all<T>(table:string):Promise<T[]> {const result:T[]=[];for(let offset=0;;offset+=500){const rows=check(await this.db.from(table).select('data').order('id').range(offset,offset+499))||[];result.push(...rows.map(r=>r.data as T));if(rows.length<500)break;}return result;}
  async entity<T>(table:string,id:string):Promise<T>{const row=check(await this.db.from(table).select('data').eq('id',id).maybeSingle());if(!row)throw new ApiFailure(404,'NOT_FOUND','Запись не найдена');return row.data as T;}
@@ -29,10 +29,10 @@ export class SupabaseRepository implements Repository {
  async download(path:string){const blob=check(await this.db.storage.from('field-photos').download(path));if(!blob)throw new ApiFailure(404,'NOT_FOUND','Фото не найдено');return blob;}
  async readNotification(id:string){const result=check(await this.db.rpc('read_notification',{p_id:id}));if(!result)throw new ApiFailure(404,'NOT_FOUND','Уведомление не найдено');return result as Notification;}
  async beginAgent(id:string,fingerprint:unknown){return unwrap<any>(check(await this.db.rpc('begin_agent',{p_operation_id:id,p_fingerprint:fingerprint})));}
- async finishAgent(id:string,conversation:Conversation|null,result:unknown,error?:string){check(await this.db.rpc('finish_agent',{p_operation_id:id,p_conversation:conversation,p_result:result,p_error:error||null}));}
+ async finishAgent(id:string,conversation:Conversation|null,result:unknown,error?:string){if(!this.admin||!this.actor)throw new ApiFailure(503,'STORAGE_UNCONFIGURED','Не настроено сохранение агента');check(await this.admin.rpc('finish_agent',{p_actor:this.actor,p_operation_id:id,p_conversation:conversation,p_result:result,p_error:error||null}));}
  async agentResult(id:string){const row=check(await this.db.from('agent_runs').select('result').eq('operation_id',id).single());if(!row)throw new ApiFailure(404,'NOT_FOUND','Запрос не найден');return row.result;}
 }
-export async function authenticated(cfg:Config,token:string){const db=client(cfg,token);const {data,error}=await db.auth.getUser(token);if(error||!data.user)throw new ApiFailure(401,'UNAUTHORIZED','Сессия недействительна');return new SupabaseRepository(db);}
+export async function authenticated(cfg:Config,token:string){const db=client(cfg,token);const {data,error}=await db.auth.getUser(token);if(error||!data.user)throw new ApiFailure(401,'UNAUTHORIZED','Сессия недействительна');return new SupabaseRepository(db,cfg.serviceKey?client(cfg,undefined,cfg.serviceKey):undefined,data.user.id);}
 export async function auth(cfg:Config,kind:'login'|'signup'|'demo',input:any):Promise<Session|{confirmationRequired:true;email:string}>{
  const db=client(cfg);const response=kind==='demo'?await db.auth.signInAnonymously():kind==='login'?await db.auth.signInWithPassword(input):await db.auth.signUp({email:input.email,password:input.password,options:{data:{name:input.name}}});
  if(response.error)throw new ApiFailure(400,'AUTH_FAILED',response.error.message);
