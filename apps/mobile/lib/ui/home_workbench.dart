@@ -4,6 +4,13 @@ extension _Workbench on _HomeState {
   void bindObservation(String? id) {
     if (observationId != id) {
       observationId = id;
+      model.activeObservation = id;
+      unawaited(
+        model.store.set(
+          'chat-active-observation:${model.account}:$fieldId',
+          id,
+        ),
+      );
       conversationId = null;
       chat.clear();
     }
@@ -309,9 +316,7 @@ extension _Workbench on _HomeState {
                     item['id']: item['note'].toString(),
                 },
                 (id) => updateUI(() {
-                  observationId = id;
-                  chat.clear();
-                  conversationId = null;
+                  bindObservation(id);
                 }),
               ),
               child: const Text('Выбрать наблюдение'),

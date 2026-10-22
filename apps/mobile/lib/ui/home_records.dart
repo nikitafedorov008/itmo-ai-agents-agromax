@@ -196,9 +196,7 @@ extension _Records on _HomeState {
             ),
           NativeButton.icon(
             onPressed: () {
-              observationId = o['id'];
-              conversationId = null;
-              chat.clear();
+              bindObservation(o['id']);
               openConversation();
             },
             icon: const Icon(CupertinoIcons.chat_bubble_2),
