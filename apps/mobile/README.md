@@ -19,3 +19,5 @@ flutter drive --driver=test_driver/native_backend_driver.dart --target=integrati
 ```
 
 The host driver writes `build/native-evidence/agromax-native-real-history.png`.
+
+Photo upload retries persist a UUID per durable local path in SQLite before the HTTP request. Multipart `operationId` lets the backend return the same photo after a lost response; uploaded photo ids and pending-path removal checkpoint together. The local path-to-operation map never enters observation JSON. Unit/SQLite tests include an accepted upload with its response lost followed by database reopen and a retry with the identical UUID.

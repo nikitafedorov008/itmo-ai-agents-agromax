@@ -32,6 +32,60 @@ void main() {
       }
     },
   );
+  test(
+    'database outage is terminal only after server marks attempt failed',
+    () {
+      expect(
+        ChatAttempt.isTerminal(
+          ChatAttempt.afterFailure(
+            request,
+            ApiFailure(503, 'Погода недоступна', null, 'WEATHER_UNAVAILABLE'),
+          ),
+        ),
+        false,
+      );
+      final unavailable = ChatAttempt.afterFailure(
+        request,
+        ApiFailure(503, 'Недоступно', null, 'DATABASE_UNAVAILABLE'),
+      );
+      expect(ChatAttempt.isTerminal(unavailable), false);
+      expect(
+        ChatAttempt.prepare(
+          unavailable,
+          newId: () => 'new',
+          provider: 'mimo',
+        )['operationId'],
+        'original',
+      );
+      final terminal = ChatAttempt.afterFailure(
+        request,
+        ApiFailure(
+          409,
+          'Предыдущая попытка завершилась ошибкой',
+          null,
+          'DATABASE_UNAVAILABLE',
+        ),
+      );
+      expect(ChatAttempt.isTerminal(terminal), true);
+      expect(
+        ChatAttempt.prepare(
+          terminal,
+          newId: () => 'new',
+          provider: 'mimo',
+        )['operationId'],
+        'new',
+      );
+    },
+  );
+  test('weather failure including terminal409 can start new attempt', () {
+    for (final status in [502, 409]) {
+      final failed = ChatAttempt.afterFailure(
+        request,
+        ApiFailure(status, 'Погода недоступна', null, 'WEATHER_UNAVAILABLE'),
+      );
+      expect(ChatAttempt.isTerminal(failed), true);
+    }
+  });
   test('network timeout and IN_PROGRESS keep UUID and original provider', () {
     for (final error in [
       const SocketException('offline'),

@@ -1,3 +1,4 @@
+import 'package:uuid/uuid.dart';
 import 'api.dart';
 import 'generated/api_routes.dart';
 import 'storage.dart';
@@ -30,15 +31,29 @@ class SyncEngine {
           if (op['type'] == 'observation.upsert') {
             final paths = List<String>.from(payload['localPhotos'] ?? []);
             final photos = List<String>.from(payload['photoIds'] ?? []);
+            final photoOperations = Map<String, String>.from(
+              payload['photoOperationIds'] ?? {},
+            );
             while (paths.isNotEmpty) {
-              photos.add(await api.upload(paths.first));
+              final path = paths.first;
+              final photoOperationId = photoOperations.putIfAbsent(
+                path,
+                () => const Uuid().v4(),
+              );
+              payload['photoOperationIds'] = photoOperations;
+              // Commit identity before network I/O, including an accepted upload
+              // whose response is lost. A restart must retry the same photo id.
+              await store.update(id, 'sending', payload: payload);
+              photos.add(await api.upload(path, operationId: photoOperationId));
               paths.removeAt(0);
               payload['photoIds'] = photos;
               payload['localPhotos'] = paths;
               await store.update(id, 'sending', payload: payload);
             }
           }
-          final wire = {...payload}..remove('localPhotos');
+          final wire = {...payload}
+            ..remove('localPhotos')
+            ..remove('photoOperationIds');
           final result = await api.request(ApiRoutes.sync, {
             'operations': [
               {'operationId': id, 'type': op['type'], 'payload': wire},

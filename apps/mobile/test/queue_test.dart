@@ -14,10 +14,24 @@ class FakeApi extends Api {
   String result = 'applied';
   final calls = <Map<String, dynamic>>[];
   final uploads = <String>[];
+  final uploadIds = <String>[];
+  final acceptedUploads = <String, String>{};
+  bool loseNextPhotoResponse = false;
+  Future<void> Function(String, String)? inspectUpload;
   @override
-  Future<String> upload(String path) async {
+  Future<String> upload(String path, {required String operationId}) async {
+    await inspectUpload?.call(path, operationId);
     uploads.add(path);
-    return 'photo-${uploads.length}';
+    uploadIds.add(operationId);
+    final photo = acceptedUploads.putIfAbsent(
+      operationId,
+      () => 'photo-${acceptedUploads.length + 1}',
+    );
+    if (loseNextPhotoResponse) {
+      loseNextPhotoResponse = false;
+      throw const SocketException('Upload accepted, response lost');
+    }
+    return photo;
   }
 
   @override
@@ -103,6 +117,50 @@ void main() {
         api.calls.last['operations'][0]['payload'].containsKey('localPhotos'),
         false,
       );
+      expect(
+        api.calls.last['operations'][0]['payload'].containsKey(
+          'photoOperationIds',
+        ),
+        false,
+      );
+    },
+  );
+  test(
+    'accepted photo with lost response reuses persisted upload UUID after reopen',
+    () async {
+      await store.enqueue('alice', 'obs-op', 'observation.upsert', {
+        'id': 'obs',
+        'photoIds': [],
+        'localPhotos': ['/durable/photo.png'],
+      });
+      final api = FakeApi()..loseNextPhotoResponse = true;
+      api.inspectUpload = (path, id) async {
+        expect(
+          (await store.queue(
+            'alice',
+          )).single['payload']['photoOperationIds'][path],
+          id,
+          reason: 'Upload UUID must be committed before network request',
+        );
+      };
+      await SyncEngine(store).drain('alice', api);
+      expect((await store.queue('alice')).single['status'], 'error');
+      expect(api.acceptedUploads.length, 1);
+      expect(api.calls, isEmpty);
+      await store.db.close();
+      store = await reopen();
+      await SyncEngine(store).drain('alice', api);
+      expect(api.uploadIds.length, 2);
+      expect(api.uploadIds.first, api.uploadIds.last);
+      expect(
+        api.acceptedUploads.length,
+        1,
+        reason: 'Server reused the accepted photo',
+      );
+      final payload = api.calls.single['operations'][0]['payload'];
+      expect(payload['photoIds'], ['photo-1']);
+      expect(payload.containsKey('photoOperationIds'), false);
+      expect((await store.queue('alice')).single['status'], 'synced');
     },
   );
   test('account isolation and sending recovery', () async {
