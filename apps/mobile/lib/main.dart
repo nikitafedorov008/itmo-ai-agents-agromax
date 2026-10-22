@@ -1,5 +1,9 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/cupertino.dart';
+import 'ui/adaptive.dart';
+import 'ui/field_map.dart';
+import 'ui/workbench.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -10,6 +14,8 @@ import 'chat_attempt.dart';
 import 'model.dart';
 import 'generated/api_routes.dart';
 import 'storage.dart';
+part 'ui/home_workbench.dart';
+part 'ui/home_records.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,11 +52,24 @@ class AgromaxApp extends StatelessWidget {
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff346540)),
-      scaffoldBackgroundColor: const Color(0xfff7f7ee),
+      colorScheme: ColorScheme.fromSeed(seedColor: forest),
+      scaffoldBackgroundColor: ivory,
+      cupertinoOverrideTheme: const CupertinoThemeData(
+        primaryColor: forest,
+        scaffoldBackgroundColor: ivory,
+      ),
+      textTheme: const TextTheme(
+        bodyMedium: TextStyle(
+          fontSize: 16,
+          height: 1.4,
+          color: Color(0xff172b23),
+        ),
+      ),
       appBarTheme: const AppBarTheme(backgroundColor: Color(0xfff7f7ee)),
       inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
       ),
       cardTheme: const CardThemeData(color: Colors.white, elevation: 0),
     ),
@@ -69,7 +88,8 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       password = TextEditingController(),
       name = TextEditingController(),
       message = TextEditingController();
-  int tab = 0;
+  int tab = 1;
+  String? observationId;
   String? fieldId;
   String provider = 'deepseek';
   String? conversationId;
@@ -77,6 +97,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
   bool chatBusy = false;
   Map<String, dynamic>? chatRetry;
   final List<Map<String, dynamic>> chat = [];
+  void updateUI(VoidCallback action) => setState(action);
   AppModel get model => ref.read(modelProvider.notifier);
   @override
   void initState() {
@@ -132,17 +153,18 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       ).where((f) => f['id'] == id).map((f) => f['name']).firstOrNull ??
       'Поле';
   Future<bool> confirm(String title, String body) async =>
-      await showDialog<bool>(
+      await adaptiveDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (context) => NativeAlert(
           title: Text(title),
           content: Text(body),
           actions: [
-            TextButton(
+            NativeButton(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Отмена'),
             ),
-            FilledButton(
+            NativeButton(
+              filled: true,
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Подтвердить'),
             ),
@@ -169,14 +191,14 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 20),
-                TextField(
+                NativeInput(
                   controller: name,
                   decoration: const InputDecoration(
                     labelText: 'Имя для регистрации',
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                NativeInput(
                   controller: email,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
@@ -184,7 +206,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                NativeInput(
                   controller: password,
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'Пароль'),
@@ -192,7 +214,8 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
                 if (model.error != null)
                   Text(model.error!, style: const TextStyle(color: Colors.red)),
                 const SizedBox(height: 16),
-                FilledButton(
+                NativeButton(
+                  filled: true,
                   onPressed: model.busy
                       ? null
                       : () => model.login(
@@ -203,7 +226,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
                         ),
                   child: const Text('Войти'),
                 ),
-                TextButton(
+                NativeButton(
                   onPressed: model.busy
                       ? null
                       : () => model.login(
@@ -214,7 +237,8 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
                         ),
                   child: const Text('Создать аккаунт'),
                 ),
-                OutlinedButton(
+                NativeButton(
+                  outlined: true,
                   onPressed: model.busy
                       ? null
                       : () => model.login('demo', '', '', ''),
@@ -236,37 +260,15 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       fieldId = fields.firstOrNull?['id'];
     }
     return Scaffold(
-      appBar: AppBar(
-        title: SvgPicture.asset('assets/logo.svg', height: 32),
-        actions: [
-          IconButton(
-            tooltip: 'Синхронизировать',
-            onPressed: model.busy ? null : () => model.sync(),
-            icon: const Icon(Icons.sync),
-          ),
-          IconButton(
-            tooltip: 'Выйти',
-            onPressed: chatBusy
-                ? null
-                : () async {
-                    if (await confirm(
-                      'Выйти?',
-                      'Черновики и очередь останутся в аккаунте на этом устройстве.',
-                    )) {
-                      chat.clear();
-                      conversationId = null;
-                      chatRetry = null;
-                      fieldId = null;
-                      await model.logout();
-                    }
-                  },
-            icon: const Icon(Icons.logout),
-          ),
-        ],
-      ),
+      appBar: isIOS
+          ? CupertinoNavigationBar(
+              middle: SvgPicture.asset('assets/logo.svg', height: 30),
+              backgroundColor: ivory,
+            )
+          : AppBar(title: SvgPicture.asset('assets/logo.svg', height: 32)),
       body: Column(
         children: [
-          if (model.busy) const LinearProgressIndicator(),
+          if (model.busy) const NativeSpinner(),
           if (model.session?['demo'] == true)
             const Material(
               color: Color(0xffe2ead5),
@@ -286,40 +288,24 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
             ),
           if (fields.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: DropdownButtonFormField<String>(
-                isExpanded: true,
-                initialValue: fieldId,
-                decoration: const InputDecoration(labelText: 'Поле'),
-                items: fields
-                    .map(
-                      (f) => DropdownMenuItem<String>(
-                        value: f['id'],
-                        child: Text(
-                          '${f['name']} · ${f['crop']} · ${f['areaHa']} га',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: chatBusy
-                    ? null
-                    : (v) async {
-                        if (v == null) {
-                          return;
-                        }
-                        await model.selectField(v);
-                        if (!mounted) {
-                          return;
-                        }
-                        setState(() {
-                          fieldId = v;
-                          chat.clear();
-                          conversationId = null;
-                          chatRetry = null;
-                        });
-                      },
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xffd8dfd1)),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: NativeButton.icon(
+                  onPressed: chatBusy ? null : selectFieldSheet,
+                  icon: const Icon(
+                    CupertinoIcons.leaf_arrow_circlepath,
+                    color: forest,
+                  ),
+                  label: Text(
+                    '${fields.firstWhere((f) => f['id'] == fieldId, orElse: () => fields.first)['name']} · ${fields.firstWhere((f) => f['id'] == fieldId, orElse: () => fields.first)['crop']}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
             ),
           Expanded(
@@ -333,429 +319,60 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
                       'Поля пока не загружены. Подключитесь к серверу и обновите.',
                     ),
                   if (tab == 0) ...fieldView(),
-                  if (tab == 1) ...observationView(),
+                  if (tab == 1) ...workbenchView(),
                   if (tab == 2) ...taskView(),
-                  if (tab == 3) ...chatView(),
-                  if (tab == 4) ...queueView(),
+                  if (tab == 3) ...moreView(),
                 ],
               ),
             ),
           ),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: tab,
-        onDestinationSelected: (i) => setState(() => tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.grass), label: 'Поле'),
-          NavigationDestination(icon: Icon(Icons.edit_note), label: 'Осмотр'),
-          NavigationDestination(icon: Icon(Icons.task_alt), label: 'Задачи'),
-          NavigationDestination(
-            icon: Icon(Icons.forum_outlined),
-            label: 'Агент',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.cloud_upload_outlined),
-            label: 'Очередь',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> createField() async {
-    final pending = await model.store.get('field-create:${model.account}');
-    if (!mounted) {
-      return;
-    }
-    if (pending != null) {
-      if (await confirm('Повторить создание поля?', pending['name'])) {
-        await act(() async {
-          final field = await model.api.request(
-            ApiRoutes.createField,
-            Map<String, dynamic>.from(pending),
-          );
-          await model.store.set('field-create:${model.account}', null);
-          await model.refresh();
-          await model.selectField(field['id']);
-        });
-      }
-      return;
-    }
-    final values = List.generate(5, (_) => TextEditingController());
-    final labels = [
-      'Название поля',
-      'Культура',
-      'Площадь, га',
-      'Широта центра',
-      'Долгота центра',
-    ];
-    final save = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Новое поле'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Поле будет отмечено точкой. Контур можно уточнить позднее.',
-              ),
-              for (var i = 0; i < values.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: TextField(
-                    controller: values[i],
-                    keyboardType: i >= 2
-                        ? const TextInputType.numberWithOptions(
-                            decimal: true,
-                            signed: true,
-                          )
-                        : TextInputType.text,
-                    decoration: InputDecoration(labelText: labels[i]),
-                  ),
+      bottomNavigationBar: isIOS
+          ? CupertinoTabBar(
+              currentIndex: tab,
+              activeColor: forest,
+              backgroundColor: ivory,
+              onTap: (i) => setState(() => tab = i),
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(CupertinoIcons.leaf_arrow_circlepath),
+                  label: 'Поле',
                 ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(c, true),
-            child: const Text('Создать'),
-          ),
-        ],
-      ),
-    );
-    final text = values.map((v) => v.text.trim()).toList();
-    if (save != true) {
-      return;
-    }
-    await act(() async {
-      final area = double.tryParse(text[2].replaceAll(',', '.'));
-      final lat = double.tryParse(text[3].replaceAll(',', '.'));
-      final lng = double.tryParse(text[4].replaceAll(',', '.'));
-      if (text[0].isEmpty ||
-          text[1].isEmpty ||
-          area == null ||
-          area <= 0 ||
-          lat == null ||
-          lat.abs() > 90 ||
-          lng == null ||
-          lng.abs() > 180) {
-        throw Exception(
-          'Заполните название, культуру, положительную площадь и корректные координаты.',
-        );
-      }
-      final payload = <String, dynamic>{
-        'operationId': uuid.v4(),
-        'confirmed': true,
-        'name': text[0],
-        'crop': text[1],
-        'areaHa': area,
-        'center': {'lat': lat, 'lng': lng},
-        'boundary': <dynamic>[],
-      };
-      await model.store.set('field-create:${model.account}', payload);
-      final field = await model.api.request(ApiRoutes.createField, payload);
-      await model.store.set('field-create:${model.account}', null);
-      await model.refresh();
-      await model.selectField(field['id']);
-    });
-  }
-
-  Widget heading(String text) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 12),
-    child: Text(
-      text,
-      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-    ),
-  );
-  Widget card(String title, String body, {List<Widget> actions = const []}) =>
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+                BottomNavigationBarItem(
+                  icon: Icon(CupertinoIcons.pencil_ellipsis_rectangle),
+                  label: 'Осмотр',
                 ),
-              ),
-              const SizedBox(height: 8),
-              SelectableText(body),
-              ...actions,
-            ],
-          ),
-        ),
-      );
-  List<Widget> fieldView() => [
-    heading('История поля'),
-    if (model.session?['user']['role'] == 'chief')
-      OutlinedButton.icon(
-        onPressed: createField,
-        icon: const Icon(Icons.add_location_alt_outlined),
-        label: const Text('Добавить поле'),
-      ),
-    if (fieldId != null)
-      Text(
-        'Координаты: ${coordinateText(items('fields').where((f) => f['id'] == fieldId).firstOrNull?['center'])}',
-      ),
-    OutlinedButton.icon(
-      onPressed: fieldId == null
-          ? null
-          : () => act(() async {
-              final weather = await model.api.request(
-                ApiRoutes.weather(fieldId!),
-              );
-              if (mounted) {
-                await showDialog<void>(
-                  context: context,
-                  builder: (c) => AlertDialog(
-                    title: const Text('Погода'),
-                    content: Text(
-                      '${weather['source']}\n${(weather['days'] as List).map((d) => '${d['date']}: ${d['minC']}…${d['maxC']} °C, ${d['rainMm']} мм').join('\n')}',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(c),
-                        child: const Text('Закрыть'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-            }),
-      icon: const Icon(Icons.cloud_outlined),
-      label: const Text('Погода из API'),
-    ),
-    for (final o in items('observations').where((o) => o['fieldId'] == fieldId))
-      card(
-        o['status'] == 'approved' ? 'Рекомендация утверждена' : 'Наблюдение',
-        '${o['note']}\n${observationDate(o['createdAt'])}\nФото: ${(o['photoIds'] as List).length}',
-        actions: [
-          for (final id in o['photoIds'] as List)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Image.network(
-                Uri.parse(apiBase).resolve(ApiRoutes.photo(id)).toString(),
-                headers: {
-                  'Authorization': 'Bearer ${model.session?['accessToken']}',
-                },
-                height: 180,
-                errorBuilder: (c, e, s) =>
-                    const Text('Фото недоступно без связи'),
-              ),
+                BottomNavigationBarItem(
+                  icon: Icon(CupertinoIcons.check_mark_circled),
+                  label: 'Задачи',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(CupertinoIcons.ellipsis_circle),
+                  label: 'Ещё',
+                ),
+              ],
+            )
+          : NavigationBar(
+              selectedIndex: tab,
+              onDestinationSelected: (i) => setState(() => tab = i),
+              destinations: const [
+                NavigationDestination(icon: Icon(Icons.grass), label: 'Поле'),
+                NavigationDestination(
+                  icon: Icon(Icons.edit_note),
+                  label: 'Осмотр',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.task_alt),
+                  label: 'Задачи',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.more_horiz),
+                  label: 'Ещё',
+                ),
+              ],
             ),
-          if (o['status'] == 'draft')
-            TextButton(
-              onPressed: () => approve(o),
-              child: const Text('Проверить и утвердить'),
-            ),
-          TextButton(
-            onPressed: () => act(() async {
-              await model.editDraft('parentObservationId', o['id']);
-              await model.editDraft('note', 'Повторный осмотр: ');
-              setState(() => tab = 1);
-            }),
-            child: const Text('Повторный осмотр'),
-          ),
-        ],
-      ),
-    if (items('observations').where((o) => o['fieldId'] == fieldId).isEmpty)
-      const Text('Наблюдений пока нет.'),
-    heading('Уведомления'),
-    for (final n in items('notifications'))
-      card(
-        n['title'],
-        n['body'],
-        actions: [
-          if (n['read'] != true)
-            TextButton(
-              onPressed: () => act(() async {
-                await model.api.request(
-                  ApiRoutes.readNotification(n['id']),
-                  {},
-                );
-                await model.refresh();
-              }),
-              child: const Text('Прочитано'),
-            ),
-        ],
-      ),
-  ];
-  Future<void> approve(Map o, [Map? proposedTask]) async {
-    if (!await confirm(
-      'Утвердить рекомендацию?',
-      '${o['note'] ?? o['body'] ?? ''}\n${proposedTask == null ? 'Запись станет неизменяемой.' : 'Будет создана задача: ${proposedTask['title']}'}',
-    )) {
-      return;
-    }
-    await act(() async {
-      await model.enqueue('observation.approve', {
-        'id': o['id'],
-        'version': o['version'],
-        'confirmed': true,
-        'task': ?proposedTask,
-      });
-      await model.sync();
-    });
-  }
-
-  List<Widget> observationView() => [
-    heading('Новое наблюдение'),
-    const Text('Черновик сохраняется на устройстве по мере ввода.'),
-    const SizedBox(height: 16),
-    TextFormField(
-      key: ValueKey(
-        'note:${model.account}:$fieldId:${model.draft['parentObservationId']}',
-      ),
-      initialValue: model.draft['note'],
-      maxLines: 4,
-      decoration: const InputDecoration(labelText: 'Что вы заметили?'),
-      onChanged: (v) => model.editDraft('note', v),
-    ),
-    const SizedBox(height: 12),
-    TextFormField(
-      key: ValueKey('extent:${model.account}:$fieldId'),
-      initialValue: model.draft['extent'],
-      decoration: const InputDecoration(labelText: 'Масштаб / участок'),
-      onChanged: (v) => model.editDraft('extent', v),
-    ),
-    Wrap(
-      spacing: 8,
-      children: [
-        TextButton.icon(
-          onPressed: () => pick(ImageSource.camera),
-          icon: const Icon(Icons.camera_alt),
-          label: const Text('Камера'),
-        ),
-        TextButton.icon(
-          onPressed: () => pick(ImageSource.gallery),
-          icon: const Icon(Icons.photo_library),
-          label: const Text('Галерея'),
-        ),
-        TextButton.icon(
-          onPressed: locate,
-          icon: const Icon(Icons.my_location),
-          label: const Text('Геопозиция'),
-        ),
-      ],
-    ),
-    if ((model.draft['photoIds'] as List?)?.isNotEmpty == true)
-      Text('Сохранённых фото: ${(model.draft['photoIds'] as List).length}'),
-    if (model.draft['location'] != null)
-      Text('Координаты: ${coordinateText(model.draft['location'])}'),
-    for (final photo in List<String>.from(model.draft['localPhotos'] ?? []))
-      Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Image.file(File(photo), height: 160, fit: BoxFit.cover),
-      ),
-    if (model.draft['parentObservationId'] != null)
-      const Text('Будет создано связанное повторное наблюдение.'),
-    FilledButton(
-      onPressed: fieldId == null
-          ? null
-          : () => act(() async {
-              await model.saveDraft(fieldId!);
-              if (mounted) {
-                setState(() => tab = 4);
-              }
-            }),
-      child: const Text('Сохранить и поставить в очередь'),
-    ),
-  ];
-  Future<void> pick(ImageSource source) => act(() async {
-    final file = await ImagePicker().pickImage(
-      source: source,
-      imageQuality: 85,
     );
-    if (file != null) {
-      await model.preservePhoto(file);
-    }
-  });
-  Future<void> locate() => act(() async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      throw Exception('Включите геолокацию в настройках устройства');
-    }
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.deniedForever ||
-        permission == LocationPermission.denied) {
-      throw Exception(
-        'Нет разрешения геопозиции. Разрешите доступ в настройках приложения.',
-      );
-    }
-    final pos = await Geolocator.getCurrentPosition();
-    await model.editDraft('location', {
-      'lat': pos.latitude,
-      'lng': pos.longitude,
-    });
-  });
-  List<Widget> taskView() => [
-    heading('Задачи хозяйства'),
-    for (final task in items('tasks').where((t) => t['fieldId'] == fieldId))
-      card(
-        task['title'],
-        '${fieldName(task['fieldId'])}\nСрок: ${task['dueAt']}\n${task['status'] == 'done' ? 'Выполнена: ${task['outcome']}' : 'Открыта'}',
-        actions: [
-          if (task['status'] == 'open')
-            TextButton(
-              onPressed: () => complete(task),
-              child: const Text('Отметить выполнение'),
-            ),
-        ],
-      ),
-    if (items('tasks').isEmpty)
-      const Text('Пока нет задач. Утвердите предложение агента с задачей.'),
-  ];
-  Future<void> complete(Map task) async {
-    final controller = TextEditingController();
-    final outcome = await showDialog<String>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Результат выполнения'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Что сделано / замечено?',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(c, controller.text),
-            child: const Text('Продолжить'),
-          ),
-        ],
-      ),
-    );
-    if (outcome == null || outcome.trim().isEmpty) {
-      return;
-    }
-    if (!await confirm('Завершить задачу?', outcome)) {
-      return;
-    }
-    await act(() async {
-      await model.enqueue('task.complete', {
-        'id': task['id'],
-        'version': task['version'],
-        'confirmed': true,
-        'outcome': outcome,
-      });
-      await model.sync();
-    });
   }
 
   List<Widget> chatView() {
@@ -768,13 +385,10 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
         : chat;
     return [
       heading('Агрономический агент'),
-      DropdownButton<String>(
-        value: provider,
-        items: const [
-          DropdownMenuItem(value: 'deepseek', child: Text('DeepSeek')),
-          DropdownMenuItem(value: 'mimo', child: Text('MiMo')),
-        ],
-        onChanged: (v) => setState(() => provider = v!),
+      NativeButton.icon(
+        onPressed: chatBusy ? null : providerSheet,
+        icon: const Icon(CupertinoIcons.slider_horizontal_3),
+        label: Text('Модель: ${provider == 'deepseek' ? 'DeepSeek' : 'MiMo'}'),
       ),
       const Text(
         'Ответы агента требуют проверки. Утверждение выполняется отдельно.',
@@ -785,13 +399,14 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
           m['text'] ?? '',
           actions: [if (m['reply'] != null) ...replyWidgets(m['reply'])],
         ),
-      if (chatBusy) const LinearProgressIndicator(),
-      TextField(
+      if (chatBusy) const NativeSpinner(),
+      NativeInput(
         controller: message,
         maxLines: 3,
         decoration: const InputDecoration(labelText: 'Спросите о поле'),
       ),
-      FilledButton(
+      NativeButton(
+        filled: true,
         onPressed: chatBusy || fieldId == null ? null : sendChat,
         child: Text(
           chatRetry == null
@@ -806,7 +421,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
           'Предыдущая попытка завершилась ошибкой модели. Новая попытка создаст отдельный запрос; можно выбрать другого провайдера.',
         ),
       if (chatRetry != null)
-        TextButton(
+        NativeButton(
           onPressed: () async {
             await model.store.set(
               'chat-pending:${model.account}:$fieldId',
@@ -824,10 +439,9 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
 
   List<Widget> replyWidgets(Map reply) => [
     Text('Модель: ${reply['model']} · ${reply['provider']}'),
-    for (final source in reply['sources'] ?? [])
-      SelectableText(
-        '${source['title']}\n${source['url']}\n${source['excerpt']}',
-      ),
+    SourceDisclosure(sources: reply['sources'] ?? []),
+    if (reply['artifact']?['question'] != null)
+      ...questionWidgets(reply['artifact']['question']),
     if (reply['artifact'] != null)
       card(
         reply['artifact']['title'],
@@ -835,7 +449,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
         actions: [
           if (reply['artifact']['kind'] == 'observation' &&
               reply['artifact']['observationId'] == null)
-            TextButton(
+            NativeButton(
               onPressed: () => act(() async {
                 await model.editDraft('note', reply['artifact']['body']);
                 setState(() => tab = 1);
@@ -844,7 +458,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
             ),
           if (reply['artifact']['observationId'] != null &&
               reply['artifact']['observationVersion'] != null)
-            TextButton(
+            NativeButton(
               onPressed: () => approve({
                 'id': reply['artifact']['observationId'],
                 'version': reply['artifact']['observationVersion'],
@@ -860,6 +474,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       return;
     }
     setState(() => chatBusy = true);
+    model.changed();
     final history = items(
       'conversations',
     ).where((c) => c['fieldId'] == fieldId).toList();
@@ -868,6 +483,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       'fieldId': fieldId,
       'message': message.text,
       'provider': provider,
+      if (observationId != null) 'observationId': observationId,
       if (conversationId != null || history.isNotEmpty)
         'conversationId': conversationId ?? history.last['id'],
     };
@@ -905,6 +521,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
     } finally {
       if (mounted) {
         setState(() => chatBusy = false);
+        model.changed();
       }
     }
   });
@@ -913,7 +530,8 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
     const Text(
       'Фото отправляются перед наблюдением. Повтор запроса использует прежний идентификатор операции.',
     ),
-    FilledButton.icon(
+    NativeButton.icon(
+      filled: true,
       onPressed: model.busy ? null : model.sync,
       icon: const Icon(Icons.sync),
       label: const Text('Повторить синхронизацию'),
@@ -931,7 +549,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
         '${op['type']}\n${op['payload']['note'] ?? op['payload']['outcome'] ?? op['payload']['id']}\n${op['error'] ?? ''}',
         actions: [
           if (op['status'] == 'conflict' && op['type'] == 'observation.upsert')
-            TextButton(
+            NativeButton(
               onPressed: () => act(() async {
                 if (await confirm(
                   'Открыть локальную версию?',

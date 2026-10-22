@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
@@ -31,7 +32,9 @@ Future<void> until(
 }
 
 Finder input(String label) => find.byWidgetPredicate(
-  (w) => w is TextField && w.decoration?.labelText == label,
+  (w) =>
+      (w is TextField && w.decoration?.labelText == label) ||
+      (w is CupertinoTextField && w.placeholder == label),
 );
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -78,7 +81,12 @@ void main() {
       await tester.tap(find.text('Войти'));
       await until(
         tester,
-        () => find.byType(NavigationBar).evaluate().isNotEmpty,
+        () => find
+            .byWidgetPredicate(
+              (w) => w is NavigationBar || w is CupertinoTabBar,
+            )
+            .evaluate()
+            .isNotEmpty,
         reason: 'Real normal-account UI login failed',
       );
       final container = ProviderScope.containerOf(
@@ -97,7 +105,9 @@ void main() {
           'Синтетический осмотр iOS $suffix: тестовая фотография, не диагноз';
       await tester.tap(find.text('Осмотр'));
       await tester.pump();
-      final noteInput = find.byWidgetPredicate((w) => w is TextFormField).first;
+      final noteInput = input('Что вы заметили?');
+      await tester.ensureVisible(noteInput);
+      await tester.pump();
       await tester.enterText(noteInput, note);
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pump();
@@ -165,7 +175,9 @@ void main() {
       );
       await tester.tap(
         find.descendant(
-          of: find.byType(NavigationBar),
+          of: find.byWidgetPredicate(
+            (w) => w is NavigationBar || w is CupertinoTabBar,
+          ),
           matching: find.text('Поле'),
         ),
       );
