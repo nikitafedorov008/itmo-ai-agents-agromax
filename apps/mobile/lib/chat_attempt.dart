@@ -32,7 +32,11 @@ abstract final class ChatAttempt {
     required String? observationId,
     required String Function() newId,
     required String provider,
+    bool explicitRetry = false,
   }) {
+    if (!explicitRetry) {
+      throw StateError('Pending requests require an explicit retry action');
+    }
     if (!matchesContext(
       pending,
       fieldId: fieldId,

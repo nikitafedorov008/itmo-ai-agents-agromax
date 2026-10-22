@@ -398,6 +398,15 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
           actions: [if (m['reply'] != null) ...replyWidgets(m['reply'])],
         ),
       if (chatBusy) const NativeSpinner(),
+      if (chatRetry != null) ...[
+        heading('Незавершённый запрос'),
+        SelectableText(chatRetry!['message'].toString()),
+        Text(
+          ChatAttempt.isTerminal(chatRetry!)
+              ? 'Новая попытка отправит именно этот запрос с новым идентификатором. Провайдер может списать оплату за новый ответ.'
+              : 'Повтор отправит именно этот запрос с прежним идентификатором. Новый текст ниже пока не отправляется.',
+        ),
+      ],
       NativeInput(
         controller: message,
         maxLines: 3,
@@ -405,7 +414,9 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
       ),
       NativeButton(
         filled: true,
-        onPressed: chatBusy || fieldId == null ? null : sendChat,
+        onPressed: chatBusy || fieldId == null
+            ? null
+            : () => sendChat(explicitRetry: chatRetry != null),
         child: Text(
           chatRetry == null
               ? 'Отправить'
@@ -428,6 +439,7 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
             model.pendingChat = null;
             if (mounted) {
               setState(() => chatRetry = null);
+              model.changed();
             }
           },
           child: const Text('Отменить повтор и написать новый запрос'),
@@ -463,13 +475,14 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
     ];
   }
 
-  Future<void> sendChat() => act(() async {
+  Future<void> sendChat({bool explicitRetry = false}) => act(() async {
     if (chatBusy || chatPreparing) return;
     chatPreparing = true;
     final requestField = fieldId;
     final requestObservation = observationId;
     final requestAccount = model.account;
     final retryKey = 'chat-pending:${model.account}:$fieldId';
+    var restoringPending = false;
     try {
       final saved = await model.store.get(retryKey);
       if (fieldId != requestField ||
@@ -488,7 +501,13 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
         if (mounted) await showPendingContext(pending!);
         return;
       }
+      restoringPending = pending != null;
       chatRetry = pending == null ? null : Map<String, dynamic>.from(pending);
+      if (pending != null && !explicitRetry) {
+        model.changed();
+        unawaited(openConversation());
+        return;
+      }
     } finally {
       chatPreparing = false;
     }
@@ -515,13 +534,16 @@ class _HomeState extends ConsumerState<Home> with WidgetsBindingObserver {
             history.last['id'],
     };
     try {
-      chatRetry = ChatAttempt.prepareForContext(
-        chatRetry!,
-        fieldId: fieldId,
-        observationId: observationId,
-        newId: uuid.v4,
-        provider: provider,
-      );
+      chatRetry = restoringPending
+          ? ChatAttempt.prepareForContext(
+              chatRetry!,
+              fieldId: fieldId,
+              observationId: observationId,
+              explicitRetry: explicitRetry,
+              newId: uuid.v4,
+              provider: provider,
+            )
+          : ChatAttempt.prepare(chatRetry!, newId: uuid.v4, provider: provider);
       await model.store.set(retryKey, chatRetry);
       model.pendingChat = chatRetry;
       final result = await model.api.request(ApiRoutes.chat, chatRetry);

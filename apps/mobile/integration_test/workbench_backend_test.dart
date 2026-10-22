@@ -33,12 +33,12 @@ void main() {
         'name': 'Поле 1 · учебный пример',
         'crop': 'Озимая пшеница',
         'areaHa': 12.5,
-        'center': {'lat': 55.75, 'lng': 37.61},
+        'center': {'lat': 55.75, 'lng': 36.95},
         'boundary': [
-          {'lat': 55.749, 'lng': 37.608},
-          {'lat': 55.752, 'lng': 37.608},
-          {'lat': 55.752, 'lng': 37.613},
-          {'lat': 55.749, 'lng': 37.613},
+          {'lat': 55.749, 'lng': 36.948},
+          {'lat': 55.752, 'lng': 36.948},
+          {'lat': 55.752, 'lng': 36.953},
+          {'lat': 55.749, 'lng': 36.953},
         ],
       });
       final observationId = uuid.v4();
@@ -50,7 +50,7 @@ void main() {
         'fieldId': field['id'],
         'note': note,
         'extent': 'Край поля',
-        'location': {'lat': 55.7505, 'lng': 37.6105},
+        'location': {'lat': 55.7505, 'lng': 36.9505},
         'photoIds': <String>[],
       });
       await AppModel.credentials.delete(key: 'session');
