@@ -23,14 +23,17 @@ Future<void> main() async {
 }
 
 String coordinateText(dynamic point) {
-  if (point is! Map || point['lat'] is! num || point['lng'] is! num)
+  if (point is! Map || point['lat'] is! num || point['lng'] is! num) {
     return 'Не указаны';
+  }
   return '${(point['lat'] as num).toStringAsFixed(5)}, ${(point['lng'] as num).toStringAsFixed(5)}';
 }
 
 String observationDate(dynamic value) {
   final date = DateTime.tryParse(value.toString())?.toLocal();
-  if (date == null) return 'Дата не указана';
+  if (date == null) {
+    return 'Дата не указана';
+  }
   String two(int n) => n.toString().padLeft(2, '0');
   return '${two(date.day)}.${two(date.month)}.${date.year} · ${two(date.hour)}:${two(date.minute)}';
 }
