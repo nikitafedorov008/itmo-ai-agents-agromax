@@ -58,3 +58,11 @@ On iOS the app uses Cupertino navigation/tab bars, inputs, buttons, alerts, acti
 Static verification: `flutter analyze` and all fourteen tests passed during implementation (twelve existing queue/chat retry tests plus verified-evidence and native-input reset regressions). Native simulator execution is coordinated separately; this paragraph does not claim a simulator run of the new design.
 
 Observation-specific conversation ids are stored locally per account/field/observation so model clarification answers continue the same context across restarts. Returned contextual actions open real field history, weather API, sources, repeat inspection and discussion flows. Map observation markers open a native detail sheet with actual note, coordinates, date and authenticated photos.
+
+A separate actual-model native integration is available (requires the configured local backend and DeepSeek; creates a fresh synthetic normal account/field/observation):
+
+```sh
+flutter drive --driver=test_driver/workbench_backend_driver.dart --target=integration_test/workbench_backend_test.dart -d B11CC23A-CE56-48B9-87D1-21770AD2A548 --dart-define=API_BASE_URL=http://localhost:8787
+```
+
+It logs in through the Cupertino UI, preserves a real local draft, requests a real model clarification through the contextual sheet, displays the returned question/options in the workbench, taps an actual option, verifies the same server conversation and unchanged draft/observation with no task silently created, and exports three screenshots plus non-secret `workbench-proof.json` under `build/native-evidence/`. It intentionally retains the fixture session and local draft for normal app relaunch. Static analysis confirms this test compiles; execution is recorded separately.
