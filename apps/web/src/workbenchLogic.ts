@@ -1,4 +1,4 @@
-import type { AgentReply, Conversation, Observation } from '@agromax/contracts';
+import type { AgentArtifact, AgentReply, Conversation, Observation } from '@agromax/contracts';
 
 export function artifactIsStale(reply?: AgentReply, observation?: Observation): boolean {
   const artifact = reply?.artifact;
@@ -29,4 +29,10 @@ export function evidenceReads(reply?: AgentReply) {
 }
 export function chatPayload(fieldId: string, conversationId: string | undefined, message: string, provider: string, observationId?: string) {
   return { fieldId, conversationId, message: message.trim(), provider, observationId };
+}
+
+/** Only a proposal for this exact draft/version may prefill the human review form. */
+export function reviewArtifact(artifact?: AgentArtifact, observation?: Observation): AgentArtifact | undefined {
+  return observation?.status === 'draft' && artifact?.observationId === observation.id &&
+    artifact.observationVersion === observation.version ? artifact : undefined;
 }

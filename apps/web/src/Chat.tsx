@@ -32,7 +32,7 @@ export function Chat({
   onArtifact: (a: AgentArtifact) => void;
   onObservation: () => void;
   observation?: Observation;
-  onAction: (action: ArtifactAction) => void;
+  onAction: (action: ArtifactAction, artifact?: AgentArtifact) => void;
 }) {
   const conversations = data.conversations.filter(
     (c) => c.fieldId === field.id,
@@ -124,7 +124,7 @@ export function Chat({
   return (
     <section className="workbench-panel">
       <div className="workbench-heading"><div><span className="eyebrow">ОСМОТР ПОЛЯ</span><h2>{field.name} <span>· {field.crop}</span></h2></div><label>Модель<select aria-label="Модель анализа" disabled={busy} value={provider} onChange={e=>setProvider(e.target.value as Provider)}>{data.providers.map(p=><option key={p.id} value={p.id}>{p.id === "deepseek" ? "DeepSeek" : "MiMo"}{p.configured ? "" : " · не подключена"}</option>)}</select></label></div>
-      <Workbench api={api} observation={observation} reply={reply} busy={busy} onSend={answer=>{setMessage(answer);void sendMessage(false, answer)}} onObserve={onObservation} onDiscuss={()=>drawer.current?.showModal()} onAction={action=>action === "reply"?drawer.current?.showModal():onAction(action)}/>
+      <Workbench api={api} observation={observation} reply={reply} busy={busy} onSend={answer=>{setMessage(answer);void sendMessage(false, answer)}} onObserve={onObservation} onDiscuss={()=>drawer.current?.showModal()} onAction={action=>action === "reply"?drawer.current?.showModal():onAction(action, action === "review_observation" ? reply?.artifact : undefined)}/>
       {error && <div className="error workbench-error" role="alert">{error}<button className="text-button" onClick={()=>drawer.current?.showModal()}>Открыть запрос и повторить</button></div>}
       <dialog ref={drawer} className="discussion-dialog" aria-label="Обсуждение поля"><div className="chat-panel">
       <button className="outline close-discussion" onClick={()=>drawer.current?.close()}>Закрыть обсуждение</button>
