@@ -16,6 +16,10 @@ export const routes = {
     "method": "POST",
     "path": "/api/auth/signup"
   },
+  "createField": {
+    "method": "POST",
+    "path": "/api/fields"
+  },
   "bootstrap": {
     "method": "GET",
     "path": "/api/bootstrap"

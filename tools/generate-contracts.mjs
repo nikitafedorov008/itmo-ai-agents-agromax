@@ -1,7 +1,7 @@
 import {mkdirSync,writeFileSync} from 'node:fs';
 const endpoints=[
  ['get','/api/health','health',false],['post','/api/auth/demo','demo',false],['post','/api/auth/login','login',false],['post','/api/auth/signup','signup',false],
- ['get','/api/bootstrap','bootstrap',true],['get','/api/fields/{id}/weather','weather',true],['post','/api/photos','uploadPhoto',true],['get','/api/photos/{id}','photo',true],
+ ['post','/api/fields','createField',true],['get','/api/bootstrap','bootstrap',true],['get','/api/fields/{id}/weather','weather',true],['post','/api/photos','uploadPhoto',true],['get','/api/photos/{id}','photo',true],
  ['post','/api/observations','saveObservation',true],['post','/api/observations/{id}/approve','approveObservation',true],['post','/api/tasks/{id}/complete','completeTask',true],
  ['post','/api/agent/chat','chat',true],['post','/api/sync','sync',true],['post','/api/notifications/{id}/read','readNotification',true]
 ];

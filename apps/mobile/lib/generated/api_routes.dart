@@ -4,6 +4,7 @@ abstract final class ApiRoutes {
   static const demo = '/api/auth/demo';
   static const login = '/api/auth/login';
   static const signup = '/api/auth/signup';
+  static const createField = '/api/fields';
   static const bootstrap = '/api/bootstrap';
   static String weather(String id) => '/api/fields/${Uri.encodeComponent(id)}/weather';
   static const uploadPhoto = '/api/photos';

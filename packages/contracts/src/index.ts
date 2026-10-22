@@ -14,6 +14,7 @@ export interface Notification {id:string; title:string; body:string; createdAt:s
 export interface Weather {fetchedAt:string; location:Point; days:{date:string; minC:number; maxC:number; rainMm:number}[]; source:string}
 export interface Session {accessToken:string; user:{id:string; email?:string; role:Role}; farm:{id:string; name:string}; demo:boolean}
 export interface Bootstrap {fields:Field[]; observations:Observation[]; tasks:Task[]; conversations:Conversation[]; notifications:Notification[]; providers:{id:Provider; configured:boolean; model:string}[]; demo:boolean}
+export interface FieldInput {operationId:string; confirmed:true; name:string; crop:string; areaHa:number; center:Point; boundary:Point[]}
 export interface ObservationInput {id?:string; fieldId:string; note:string; extent?:string; location?:Point; photoIds:string[]; parentObservationId?:string; version?:number}
 export interface SyncOperation {operationId:string; type:'observation.upsert'|'observation.approve'|'task.complete'; payload:Record<string,unknown>}
 export interface SyncResult {operationId:string; status:'applied'|'conflict'|'error'; data?:unknown; error?:string}

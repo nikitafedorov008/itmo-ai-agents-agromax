@@ -7,6 +7,8 @@ API origin http://localhost:8787. All JSON camelCase. Errors {error,code,current
 - POST /api/auth/login {email,password} => Session
 - POST /api/auth/signup {email,password,name} => Session (or explicit email confirmation state)
 - GET /api/bootstrap => Bootstrap (see packages/contracts/src/index.ts)
+- POST /api/fields {operationId,confirmed:true,name,crop,areaHa,center,boundary} => Field; chief only, boundary=[] means point-only field without invented contour
+- GET /api/photos/:id => private binary image, Bearer required
 - GET /api/fields/:id/weather => Weather
 - POST /api/photos multipart form field file => Photo; authenticated private retrieval URL; clients resolve relative URLs against API origin and send Bearer on retrieval
 - POST /api/observations {operationId,...ObservationInput} => Observation
