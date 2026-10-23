@@ -74,3 +74,8 @@ flutter drive --driver=test_driver/native_backend_driver.dart --target=integrati
 ![Созданное на iOS наблюдение в вебе](screenshots/mobile-to-web.png)
 
 [Нативная история iOS](screenshots/ios-history.png)
+
+
+## Облачное развёртывание — 23 октября 2026
+
+Публичный origin: https://agromax-itmo.onrender.com. Прошли 10 облачных интеграционных сценариев, 9 проверок прав/валидации и по живому запросу DeepSeek/MiMo с инструментами. Нативный iOS-тест прошёл через тот же облачный сервер; созданное им наблюдение с фото видно в публичном вебе. Фактический cron-запуск успешен. Детали и ограничения: [DEPLOYMENT.md](DEPLOYMENT.md).

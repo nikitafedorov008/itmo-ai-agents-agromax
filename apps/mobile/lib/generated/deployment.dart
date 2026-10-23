@@ -1,2 +1,2 @@
-// Updated by tools/configure-cloud.mjs after verifying the deployed HTTPS API.
-const defaultApiOrigin = 'http://localhost:8787';
+// Public endpoint, no credentials. Override API_BASE_URL for local development.
+const defaultApiOrigin = 'https://agromax-itmo.onrender.com';

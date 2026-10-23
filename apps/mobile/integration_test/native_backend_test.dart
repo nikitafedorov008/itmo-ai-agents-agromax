@@ -42,13 +42,20 @@ void main() {
     'normal account login, native photo outbox, server history and SQLite reopen',
     (tester) async {
       final suffix = DateTime.now().microsecondsSinceEpoch;
-      final email = 'native-$suffix@example.test';
-      const password = 'NativeFixture-2026-test';
-      final session = await Api('').request(ApiRoutes.signup, {
-        'email': email,
-        'password': password,
-        'name': 'Синтетический iOS тест',
-      });
+      const fixtureEmail = String.fromEnvironment('TEST_EMAIL');
+      const fixturePassword = String.fromEnvironment('TEST_PASSWORD');
+      final email = fixtureEmail.isEmpty
+          ? 'native-$suffix@example.test'
+          : fixtureEmail;
+      final password = fixtureEmail.isEmpty
+          ? 'NativeFixture-2026-test'
+          : fixturePassword;
+      final session = await Api('')
+          .request(fixtureEmail.isEmpty ? ApiRoutes.signup : ApiRoutes.login, {
+            'email': email,
+            'password': password,
+            if (fixtureEmail.isEmpty) 'name': 'Синтетический iOS тест',
+          });
       expect(
         session['accessToken'],
         isA<String>(),
