@@ -1,0 +1,14 @@
+{
+  "workbookId":"s07l144zfk4eb",
+  "connectionId":"z7etiizjrnkwi",
+  "chartId":"govayq2eer7ez",
+  "dashboardId":"ow3j54zhzl2m7",
+  "publicUrl":"https://datalens.yandex/ow3j54zhzl2m7?_share_link=public",
+  "api":"https://agromax-itmo.onrender.com/api/metrics/demo",
+  "autoRefreshSeconds":60,
+  "scope":"synthetic-demo-only",
+  "verifiedRunsBefore":3,
+  "verifiedRunsAfter":4,
+  "verifiedAtMoscow":"2026-10-23 21:50",
+  "oldDashboardPreserved":"https://datalens.yandex/krimmm055h123?_share_link=public"
+}

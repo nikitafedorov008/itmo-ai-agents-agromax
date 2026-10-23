@@ -17,3 +17,11 @@ RPC доступна только service_role. Endpoint выдаёт заран
 DataLens автоматически запрашивает HTTPS endpoint; фактический цикл и доказательства обновления фиксируются после проверки. Бесплатный Render может спать: первый запрос тогда требует прогрева.
 
 Документация API Connector: https://yandex.cloud/ru/docs/datalens/operations/connection/create-api-connector ; пример Editor: https://yandex.cloud/ru/docs/datalens/charts/editor/quickstart/from-api-connector .
+
+## Проверено 23.10.2026
+
+Публичный дашборд: https://datalens.yandex/ow3j54zhzl2m7?_share_link=public . Настроен API Connector только GET/HTTPS, без секретных заголовков. Минутный экранный таймер включён и сохранён.
+
+В проверке DeepSeek и MiMo вернули200; повтор каждого operationId вернул200 без нового agent_run. Счётчик1→3. Затем ещё один DeepSeek-запуск проверил именно автоматический цикл: сохранённый дашборд без reload показал3→4 и новый run в журнале (снимок21:50МСК). Среднее7,8с, p9514,9с, ошибок0/4, ответы с источниками3/4. Это малый учебный набор, не рабочий SLA. Один старый интервал legacy и три новых с finished_at. Публичный viewer DataLens загрузил цифры без панели аккаунта. Прямой RPC anon получил401. API-изменения:65unit-тестов и TypeScript passed.
+
+Исходники чарта и идентификаторы: `monitoring/datalens`. Локальные доказательства в игнорируемой `.data/monitoring-*`; токены и данные входа в репозиторий не добавлены. Старая ДЗ3/Sheets/n8n/DataLens сохранена без изменений.
