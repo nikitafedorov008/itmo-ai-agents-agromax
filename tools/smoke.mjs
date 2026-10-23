@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
 import {mkdirSync,writeFileSync} from 'node:fs';
 const base=process.env.API_BASE_URL||'http://localhost:8787';
+const evidenceDir=process.env.CHECK_DATA_DIR||'.data';
 let checks=[];
 async function call(path,body,token,status=200,method=body===undefined?'GET':'POST'){const r=await fetch(base+path,{method,headers:{...(body instanceof FormData?{}:{'Content-Type':'application/json'}),...(token?{Authorization:`Bearer ${token}`}:{})},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)});const d=(r.headers.get('content-type')||'').includes('json')?await r.json():await r.arrayBuffer();assert.equal(r.status,status,`${path}: ${r.status} ${JSON.stringify(d)}`);return d;}
 const health=await call('/api/health');assert.equal(health.ok,true);checks.push('Real Supabase health');
@@ -21,10 +22,12 @@ await call('/api/observations',{...input,operationId:uuid(),version:1},a.accessT
 const child=await call('/api/observations',{operationId:uuid(),id:uuid(),fieldId:f.id,note:'Повторный осмотр: изменений нет.',photoIds:[],parentObservationId:o.id},a.accessToken);assert.equal(child.parentObservationId,o.id);
 const completed=await call('/api/tasks/'+approved.task.id+'/complete',{operationId:uuid(),version:approved.task.version,confirmed:true,outcome:'Повторный осмотр выполнен; изменений нет.'},a.accessToken);assert.equal(completed.status,'done');checks.push('Linked revisit and persisted completion');
 const sync=await call('/api/sync',{operations:[{operationId:input.operationId,type:'observation.upsert',payload:Object.fromEntries(Object.entries(input).filter(([k])=>k!=='operationId'))}]},a.accessToken);assert.equal(sync.results[0].status,'applied');checks.push('Sync replay without duplicate');
+if(process.env.SMOKE_SKIP_SIGNUP!=='1'){
 const normalEmail=`smoke-${uuid()}@example.test`;const user=await call('/api/auth/signup',{email:normalEmail,password:uuid()+'Ag!',name:'Тестовое хозяйство'},undefined);assert.ok(user.accessToken);const empty=await call('/api/bootstrap',undefined,user.accessToken);assert.equal(empty.fields.length,0);
 const field=await call('/api/fields',{operationId:uuid(),confirmed:true,name:'Участок 1',crop:'Пшеница',areaHa:12,center:{lat:55.7,lng:37.4},boundary:[]},user.accessToken,201);assert.equal(field.boundary.length,0);checks.push('Real signup and empty farm field onboarding');
+}
 const after=await call('/api/bootstrap',undefined,a.accessToken);assert.equal(after.observations.length,2);assert.equal(after.tasks.length,1);
 if(after.notifications[0]){const n=await call('/api/notifications/'+after.notifications[0].id+'/read',{},a.accessToken);assert.equal(n.read,true);checks.push('Notification read persisted');}
-mkdirSync('.data',{recursive:true});writeFileSync('.data/smoke-session.json',JSON.stringify({session:a,fieldId:f.id,observationId:child.id}));
-writeFileSync('.data/smoke-result.json',JSON.stringify({at:new Date().toISOString(),checks},null,2));
+mkdirSync(evidenceDir,{recursive:true});writeFileSync(`${evidenceDir}/smoke-session.json`,JSON.stringify({apiOrigin:base,session:a,fieldId:f.id,observationId:child.id}),{mode:0o600});
+writeFileSync(`${evidenceDir}/smoke-result.json`,JSON.stringify({at:new Date().toISOString(),checks},null,2));
 console.log(JSON.stringify({passed:checks.length,checks},null,2));
