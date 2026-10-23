@@ -3,10 +3,11 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 import 'generated/api_routes.dart';
+import 'generated/deployment.dart';
 
 const apiBase = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://localhost:8787',
+  defaultValue: defaultApiOrigin,
 );
 
 class ApiFailure implements Exception {
@@ -36,7 +37,13 @@ class Api {
         await (body == null
                 ? http.get(uri, headers: headers)
                 : http.post(uri, headers: headers, body: jsonEncode(body)))
-            .timeout(Duration(seconds: path == ApiRoutes.chat ? 75 : 30));
+            .timeout(
+              Duration(
+                seconds: base.startsWith('https://')
+                    ? (path == ApiRoutes.chat ? 150 : 120)
+                    : (path == ApiRoutes.chat ? 75 : 30),
+              ),
+            );
     final data = jsonDecode(r.body) as Map<String, dynamic>;
     if (r.statusCode >= 400) {
       throw ApiFailure(

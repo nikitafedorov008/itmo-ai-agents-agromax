@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: agromax
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start -w @agromax/api
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        value: deepseek-flash
+      - key: MIMO_API_KEY
+        sync: false
+      - key: MIMO_BASE_URL
+        value: https://api.xiaomimimo.com/v1
+      - key: MIMO_MODEL
+        value: mimo-v2.6-flash

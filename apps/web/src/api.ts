@@ -2,7 +2,7 @@ import { type Session } from "@agromax/contracts";
 import { AgromaxClient } from "@agromax/contracts/client";
 export const ORIGIN =
   (import.meta as unknown as { env: Record<string, string> }).env
-    .VITE_API_ORIGIN || "http://localhost:8787";
+    .VITE_API_ORIGIN || ((import.meta as unknown as { env: { PROD: boolean } }).env.PROD ? window.location.origin : "http://localhost:8787");
 export function readSession(): Session | null {
   try {
     const s = JSON.parse(sessionStorage.getItem("agromax.session") || "null");
