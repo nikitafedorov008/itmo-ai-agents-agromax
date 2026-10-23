@@ -8,13 +8,15 @@ import { ApiFailure,chatInput,operationPayload,uuid } from './domain.js';
 import { auth,authenticated,client,type Repository } from './repository.js';
 import { runAgent } from './agent.js';
 import { weather } from './weather.js';
-export type Dependencies={authenticate?:(token:string)=>Promise<Repository>;auth?:typeof auth;fetch?:typeof fetch};
+import { monitoringSnapshot } from './monitoring.js';
+export type Dependencies={authenticate?:(token:string)=>Promise<Repository>;auth?:typeof auth;fetch?:typeof fetch;monitoring?:typeof monitoringSnapshot};
 export function createApp(cfg:Config,deps:Dependencies={}){
  const app=new Hono<{Variables:{repo:Repository}}>();
  app.use('/api/*',cors({origin:cfg.origins,allowHeaders:['Content-Type','Authorization'],allowMethods:['GET','POST','OPTIONS']}));
  app.use('/api/*',bodyLimit({maxSize:11*1024*1024,onError:c=>c.json({error:'Слишком большой запрос',code:'TOO_LARGE'},413)}));
  app.onError((err,c)=>{if(err instanceof ApiFailure)return c.json({error:err.message,code:err.code,...(err.current?{current:err.current}:{})},err.status as any);if(err instanceof z.ZodError)return c.json({error:'Проверьте данные запроса',code:'INVALID',details:err.issues.map(i=>({path:i.path,message:i.message}))},400);if(err instanceof SyntaxError)return c.json({error:'Неверный JSON',code:'INVALID'},400);console.error('API failure',err.name);return c.json({error:'Внутренняя ошибка сервера',code:'INTERNAL'},500);});
  app.get('/api/health',async c=>{try{const db=client(cfg,undefined,cfg.serviceKey||cfg.anonKey);const {error}=await db.from('sources').select('id').limit(1);return c.json({ok:!error,storage:error?'unavailable':'supabase'},error?503:200);}catch{return c.json({ok:false,storage:'unconfigured'},503);}});
+ app.get('/api/metrics/demo',async c=>{c.header('Cache-Control','no-store');return c.json(await (deps.monitoring||monitoringSnapshot)(cfg));});
  app.post('/api/auth/demo',async c=>c.json(await (deps.auth||auth)(cfg,'demo',{})));
  app.post('/api/auth/login',async c=>{const body=z.object({email:z.string().email(),password:z.string().min(1).max(200)}).strict().parse(await c.req.json());return c.json(await (deps.auth||auth)(cfg,'login',body));});
  app.post('/api/auth/signup',async c=>{const body=z.object({email:z.string().email(),password:z.string().min(8).max(200),name:z.string().trim().min(1).max(100)}).strict().parse(await c.req.json());return c.json(await (deps.auth||auth)(cfg,'signup',body));});
